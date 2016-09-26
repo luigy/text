@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, Rank2Types, UnboxedTuples #-}
+{-# LANGUAGE BangPatterns, Rank2Types, UnboxedTuples, CPP #-}
 
 -- |
 -- Module      : Data.Text.Internal.Private
@@ -19,8 +19,12 @@ import Control.Monad.ST (ST, runST)
 import Data.Text.Internal (Text(..), text)
 import Data.Text.Unsafe (Iter(..), iter)
 import qualified Data.Text.Array as A
+#ifdef __GHCJS__
+import qualified Data.JSString as JSS
+#endif
 
 span_ :: (Char -> Bool) -> Text -> (# Text, Text #)
+#ifndef __GHCJS__
 span_ p t@(Text arr off len) = (# hd,tl #)
   where hd = text arr off k
         tl = text arr (off+k) (len-k)
@@ -28,6 +32,9 @@ span_ p t@(Text arr off len) = (# hd,tl #)
         loop !i | i < len && p c = loop (i+d)
                 | otherwise      = i
             where Iter c d       = iter t i
+#else
+span_ p (Text t) = let (# a, b #) = JSS.span_ p t in (# Text a, Text b #)
+#endif
 {-# INLINE span_ #-}
 
 runText :: (forall s. (A.MArray s -> Int -> ST s Text) -> ST s Text) -> Text

@@ -37,7 +37,8 @@ import Data.Text.Internal.Unsafe.Shift (shiftR)
 import Data.Word (Word8)
 
 restreamUtf16BE :: Stream Char -> Stream Word8
-restreamUtf16BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+-- restreamUtf16BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+restreamUtf16BE (Stream next0 s0) = Stream next (RS0 s0) -- (len * 2)
   where
     next (RS0 s) = case next0 s of
         Done -> Done
@@ -61,7 +62,8 @@ restreamUtf16BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
 {-# INLINE restreamUtf16BE #-}
 
 restreamUtf16LE :: Stream Char -> Stream Word8
-restreamUtf16LE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+-- restreamUtf16LE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+restreamUtf16LE (Stream next0 s0) = Stream next (RS0 s0) -- (len * 2)
   where
     next (RS0 s) = case next0 s of
         Done -> Done
@@ -85,7 +87,8 @@ restreamUtf16LE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
 {-# INLINE restreamUtf16LE #-}
 
 restreamUtf32BE :: Stream Char -> Stream Word8
-restreamUtf32BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+restreamUtf32BE (Stream next0 s0) = Stream next (RS0 s0) -- (len * 2)
+-- restreamUtf32BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
   where
     next (RS0 s) = case next0 s of
         Done       -> Done
@@ -104,7 +107,8 @@ restreamUtf32BE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
 {-# INLINE restreamUtf32BE #-}
 
 restreamUtf32LE :: Stream Char -> Stream Word8
-restreamUtf32LE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
+restreamUtf32LE (Stream next0 s0) = Stream next (RS0 s0) -- (len * 2)
+-- restreamUtf32LE (Stream next0 s0 len) = Stream next (RS0 s0) (len * 2)
   where
     next (RS0 s) = case next0 s of
         Done       -> Done

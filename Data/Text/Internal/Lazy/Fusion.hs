@@ -35,55 +35,59 @@ import qualified Data.Text.Internal as I
 import qualified Data.Text.Array as A
 import Data.Text.Internal.Unsafe.Char (unsafeWrite)
 import Data.Text.Internal.Unsafe.Shift (shiftL)
-import Data.Text.Unsafe (Iter(..), iter)
+-- import Data.Text.Unsafe (Iter(..), iter)
 import Data.Int (Int64)
 
 default(Int64)
 
+-- TODO
 -- | /O(n)/ Convert a 'Text' into a 'Stream Char'.
 stream :: Text -> Stream Char
-stream text = Stream next (text :*: 0) unknownSize
-  where
-    next (Empty :*: _) = Done
-    next (txt@(Chunk t@(I.Text _ _ len) ts) :*: i)
-        | i >= len  = next (ts :*: 0)
-        | otherwise = Yield c (txt :*: i+d)
-        where Iter c d = iter t i
+stream = undefined
+-- stream text = Stream next (text :*: 0) unknownSize
+--   where
+--     next (Empty :*: _) = Done
+--     next (txt@(Chunk t@(I.Text _ _ len) ts) :*: i)
+--         | i >= len  = next (ts :*: 0)
+--         | otherwise = Yield c (txt :*: i+d)
+        -- where Iter c d = iter t i
 {-# INLINE [0] stream #-}
 
+-- TODO
 -- | /O(n)/ Convert a 'Stream Char' into a 'Text', using the given
 -- chunk size.
 unstreamChunks :: Int -> Stream Char -> Text
-unstreamChunks !chunkSize (Stream next s0 len0)
-  | isEmpty len0 = Empty
-  | otherwise    = outer s0
-  where
-    outer so = {-# SCC "unstreamChunks/outer" #-}
-              case next so of
-                Done       -> Empty
-                Skip s'    -> outer s'
-                Yield x s' -> runST $ do
-                                a <- A.new unknownLength
-                                unsafeWrite a 0 x >>= inner a unknownLength s'
-                    where unknownLength = 4
-      where
-        inner marr !len s !i
-            | i + 1 >= chunkSize = finish marr i s
-            | i + 1 >= len       = {-# SCC "unstreamChunks/resize" #-} do
-                let newLen = min (len `shiftL` 1) chunkSize
-                marr' <- A.new newLen
-                A.copyM marr' 0 marr 0 len
-                inner marr' newLen s i
-            | otherwise =
-                {-# SCC "unstreamChunks/inner" #-}
-                case next s of
-                  Done        -> finish marr i s
-                  Skip s'     -> inner marr len s' i
-                  Yield x s'  -> do d <- unsafeWrite marr i x
-                                    inner marr len s' (i+d)
-        finish marr len s' = do
-          arr <- A.unsafeFreeze marr
-          return (I.Text arr 0 len `Chunk` outer s')
+unstreamChunks = undefined
+-- unstreamChunks !chunkSize (Stream next s0 len0)
+--   | isEmpty len0 = Empty
+--   | otherwise    = outer s0
+--   where
+--     outer so = {-# SCC "unstreamChunks/outer" #-}
+--               case next so of
+--                 Done       -> Empty
+--                 Skip s'    -> outer s'
+--                 Yield x s' -> runST $ do
+--                                 a <- A.new unknownLength
+--                                 unsafeWrite a 0 x >>= inner a unknownLength s'
+--                     where unknownLength = 4
+--       where
+--         inner marr !len s !i
+--             | i + 1 >= chunkSize = finish marr i s
+--             | i + 1 >= len       = {-# SCC "unstreamChunks/resize" #-} do
+--                 let newLen = min (len `shiftL` 1) chunkSize
+--                 marr' <- A.new newLen
+--                 A.copyM marr' 0 marr 0 len
+--                 inner marr' newLen s i
+--             | otherwise =
+--                 {-# SCC "unstreamChunks/inner" #-}
+--                 case next s of
+--                   Done        -> finish marr i s
+--                   Skip s'     -> inner marr len s' i
+--                   Yield x s'  -> do d <- unsafeWrite marr i x
+--                                     inner marr len s' (i+d)
+--         finish marr len s' = do
+--           arr <- A.unsafeFreeze marr
+--           return (I.Text arr 0 len `Chunk` outer s')
 {-# INLINE [0] unstreamChunks #-}
 
 -- | /O(n)/ Convert a 'Stream Char' into a 'Text', using

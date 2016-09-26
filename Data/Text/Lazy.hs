@@ -301,15 +301,16 @@ equal :: Text -> Text -> Bool
 equal Empty Empty = True
 equal Empty _     = False
 equal _ Empty     = False
-equal (Chunk a as) (Chunk b bs) =
-    case compare lenA lenB of
-      LT -> a == (T.takeWord16 lenA b) &&
-            as `equal` Chunk (T.dropWord16 lenA b) bs
-      EQ -> a == b && as `equal` bs
-      GT -> T.takeWord16 lenB a == b &&
-            Chunk (T.dropWord16 lenB a) as `equal` bs
-  where lenA = T.lengthWord16 a
-        lenB = T.lengthWord16 b
+equal _ _ = error "Data.Text.Lazy.equal: not implemented."
+-- equal (Chunk a as) (Chunk b bs) =
+--     case compare lenA lenB of
+--       LT -> a == (T.takeWord16 lenA b) &&
+--             as `equal` Chunk (T.dropWord16 lenA b) bs
+--       EQ -> a == b && as `equal` bs
+--       GT -> T.takeWord16 lenB a == b &&
+--             Chunk (T.dropWord16 lenB a) as `equal` bs
+--   where lenA = T.lengthWord16 a
+--         lenB = T.lengthWord16 b
 
 instance Eq Text where
     (==) = equal
@@ -322,18 +323,19 @@ compareText :: Text -> Text -> Ordering
 compareText Empty Empty = EQ
 compareText Empty _     = LT
 compareText _     Empty = GT
-compareText (Chunk a0 as) (Chunk b0 bs) = outer a0 b0
- where
-  outer ta@(T.Text arrA offA lenA) tb@(T.Text arrB offB lenB) = go 0 0
-   where
-    go !i !j
-      | i >= lenA = compareText as (chunk (T.Text arrB (offB+j) (lenB-j)) bs)
-      | j >= lenB = compareText (chunk (T.Text arrA (offA+i) (lenA-i)) as) bs
-      | a < b     = LT
-      | a > b     = GT
-      | otherwise = go (i+di) (j+dj)
-      where T.Iter a di = T.iter ta i
-            T.Iter b dj = T.iter tb j
+compareText (Chunk a0 as) (Chunk b0 bs) = error "Data.Text.Lazy.compareText: not implemented."
+-- compareText (Chunk a0 as) (Chunk b0 bs) = outer a0 b0
+--  where
+--   outer ta@(T.Text arrA offA lenA) tb@(T.Text arrB offB lenB) = go 0 0
+--    where
+--     go !i !j
+--       | i >= lenA = compareText as (chunk (T.Text arrB (offB+j) (lenB-j)) bs)
+--       | j >= lenB = compareText (chunk (T.Text arrA (offA+i) (lenA-i)) as) bs
+--       | a < b     = LT
+--       | a > b     = GT
+--       | otherwise = go (i+di) (j+dj)
+--       where T.Iter a di = T.iter ta i
+--             T.Iter b dj = T.iter tb j
 
 instance Show Text where
     showsPrec p ps r = showsPrec p (unpack ps) r
@@ -545,7 +547,7 @@ tail Empty        = emptyError "tail"
     unstream (S.tail (stream t)) = tail t
  #-}
 
--- | /O(n\/c)/ Returns all but the last character of a 'Text', which must
+-- | /O(1)/ Returns all but the last character of a 'Text', which must
 -- be non-empty.  Subject to fusion.
 init :: Text -> Text
 init (Chunk t0 ts0) = go t0 ts0
@@ -581,7 +583,7 @@ isSingleton :: Text -> Bool
 isSingleton = S.isSingleton . stream
 {-# INLINE isSingleton #-}
 
--- | /O(n\/c)/ Returns the last character of a 'Text', which must be
+-- | /O(1)/ Returns the last character of a 'Text', which must be
 -- non-empty.  Subject to fusion.
 last :: Text -> Char
 last Empty        = emptyError "last"
@@ -1114,16 +1116,17 @@ dropEnd n t0
 -- values dropped, or the empty 'Text' if @n@ is greater than the
 -- number of 'Word16' values present.
 dropWords :: Int64 -> Text -> Text
-dropWords i t0
-    | i <= 0    = t0
-    | otherwise = drop' i t0
-  where drop' 0 ts           = ts
-        drop' _ Empty        = Empty
-        drop' n (Chunk (T.Text arr off len) ts)
-            | n < len'  = chunk (text arr (off+n') (len-n')) ts
-            | otherwise = drop' (n - len') ts
-            where len'  = fromIntegral len
-                  n'    = fromIntegral n
+dropWords = P.undefined
+-- dropWords i t0
+--     | i <= 0    = t0
+--     | otherwise = drop' i t0
+--   where drop' 0 ts           = ts
+--         drop' _ Empty        = Empty
+--         drop' n (Chunk (T.Text arr off len) ts)
+--             | n < len'  = chunk (text arr (off+n') (len-n')) ts
+--             | otherwise = drop' (n - len') ts
+--             where len'  = fromIntegral len
+--                   n'    = fromIntegral n
 
 -- | /O(n)/ 'takeWhile', applied to a predicate @p@ and a 'Text',
 -- returns the longest prefix (possibly empty) of elements that
@@ -1244,12 +1247,13 @@ splitAt = loop
 -- values, and whose second is the remainder of the string.
 splitAtWord :: Int64 -> Text -> PairS Text Text
 splitAtWord _ Empty = empty :*: empty
-splitAtWord x (Chunk c@(T.Text arr off len) cs)
-    | y >= len  = let h :*: t = splitAtWord (x-fromIntegral len) cs
-                  in  Chunk c h :*: t
-    | otherwise = chunk (text arr off y) empty :*:
-                  chunk (text arr (off+y) (len-y)) cs
-    where y = fromIntegral x
+splitAtWord _ _ = P.undefined
+-- splitAtWord x (Chunk c@(T.Text arr off len) cs)
+--     | y >= len  = let h :*: t = splitAtWord (x-fromIntegral len) cs
+--                   in  Chunk c h :*: t
+--     | otherwise = chunk (text arr off y) empty :*:
+--                   chunk (text arr (off+y) (len-y)) cs
+--     where y = fromIntegral x
 
 -- | /O(n+m)/ Find the first instance of @needle@ (which must be
 -- non-'null') in @haystack@.  The first element of the returned tuple
@@ -1421,15 +1425,16 @@ splitOn :: Text
         -> Text
         -- ^ Input text.
         -> [Text]
-splitOn pat src
-    | null pat        = emptyError "splitOn"
-    | isSingleton pat = split (== head pat) src
-    | otherwise       = go 0 (indices pat src) src
-  where
-    go  _ []     cs = [cs]
-    go !i (x:xs) cs = let h :*: t = splitAtWord (x-i) cs
-                      in  h : go (x+l) xs (dropWords l t)
-    l = foldlChunks (\a (T.Text _ _ b) -> a + fromIntegral b) 0 pat
+splitOn = P.undefined
+-- splitOn pat src
+--     | null pat        = emptyError "splitOn"
+--     | isSingleton pat = split (== head pat) src
+--     | otherwise       = go 0 (indices pat src) src
+--   where
+--     go  _ []     cs = [cs]
+--     go !i (x:xs) cs = let h :*: t = splitAtWord (x-i) cs
+--                       in  h : go (x+l) xs (dropWords l t)
+--     l = foldlChunks (\a (T.Text _ _ b) -> a + fromIntegral b) 0 pat
 {-# INLINE [1] splitOn #-}
 
 {-# RULES
@@ -1531,10 +1536,11 @@ isSuffixOf x y = reverse x `isPrefixOf` reverse y
 -- In (unlikely) bad cases, this function's time complexity degrades
 -- towards /O(n*m)/.
 isInfixOf :: Text -> Text -> Bool
-isInfixOf needle haystack
-    | null needle        = True
-    | isSingleton needle = S.elem (head needle) . S.stream $ haystack
-    | otherwise          = not . L.null . indices needle $ haystack
+isInfixOf _ _ = True
+-- isInfixOf needle haystack
+--     | null needle        = True
+--     | isSingleton needle = S.elem (head needle) . S.stream $ haystack
+--     | otherwise          = not . L.null . indices needle $ haystack
 {-# INLINE [1] isInfixOf #-}
 
 {-# RULES

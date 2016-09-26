@@ -1,4 +1,6 @@
 {-# LANGUAGE BangPatterns, CPP, Rank2Types #-}
+{-# LANGUAGE ForeignFunctionInterface, UnliftedFFITypes, UnboxedTuples,
+             MagicHash #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -----------------------------------------------------------------------------
@@ -73,6 +75,8 @@ import qualified Data.Text as S
 import qualified Data.Text.Array as A
 import qualified Data.Text.Lazy as L
 
+import Data.JSString (JSString)
+import GHC.Exts (ByteArray#, Int#, Int(I#))
 ------------------------------------------------------------------------
 
 -- | A @Builder@ is an efficient way to build lazy @Text@ values.
@@ -164,10 +168,17 @@ copyLimit = 128
 --  * @'toLazyText' ('fromText' t) = 'L.fromChunks' [t]@
 --
 fromText :: S.Text -> Builder
-fromText t@(Text arr off l)
+fromText t@(Text t')
     | S.null t       = empty
     | l <= copyLimit = writeN l $ \marr o -> A.copyI marr o arr off (l+o)
     | otherwise      = flush `append` mapBuilder (t :)
+  where
+    (# ba, len #) = js_fromString t'
+    (arr, off, l) = (A.Array ba, 0, I# len)
+-- fromText t@(Text arr off l)
+--     | S.null t       = empty
+--     | l <= copyLimit = writeN l $ \marr o -> A.copyI marr o arr off (l+o)
+--     | otherwise      = flush `append` mapBuilder (t :)
 {-# INLINE [1] fromText #-}
 
 {-# RULES
@@ -182,10 +193,10 @@ fromText t@(Text arr off l)
 fromString :: String -> Builder
 fromString str = Builder $ \k (Buffer p0 o0 u0 l0) ->
     let loop !marr !o !u !l [] = k (Buffer marr o u l)
-        loop marr o u l s@(c:cs)
+        loop marr o@(I# o#) u@(I# u#) l s@(c:cs)
             | l <= 1 = do
                 arr <- A.unsafeFreeze marr
-                let !t = Text arr o u
+                let !t = Text $ js_toString (A.aBA arr) o# u#
                 marr' <- A.new chunkSize
                 ts <- inlineInterleaveST (loop marr' 0 0 chunkSize s)
                 return $ t : ts
@@ -195,6 +206,21 @@ fromString str = Builder $ \k (Buffer p0 o0 u0 l0) ->
     in loop p0 o0 u0 l0 str
   where
     chunkSize = smallChunkSize
+-- fromString str = Builder $ \k (Buffer p0 o0 u0 l0) ->
+--     let loop !marr !o !u !l [] = k (Buffer marr o u l)
+--         loop marr o u l s@(c:cs)
+--             | l <= 1 = do
+--                 arr <- A.unsafeFreeze marr
+--                 let !t = Text arr o u
+--                 marr' <- A.new chunkSize
+--                 ts <- inlineInterleaveST (loop marr' 0 0 chunkSize s)
+--                 return $ t : ts
+--             | otherwise = do
+--                 n <- unsafeWrite marr (o+u) c
+--                 loop marr o (u+n) (l-n) cs
+--     in loop p0 o0 u0 l0 str
+--   where
+--     chunkSize = smallChunkSize
 {-# INLINE fromString #-}
 
 -- | /O(1)./ A @Builder@ taking a lazy @Text@, satisfying
@@ -234,16 +260,24 @@ toLazyTextWith chunkSize m = L.fromChunks (runST $
 -- | /O(1)./ Pop the strict @Text@ we have constructed so far, if any,
 -- yielding a new chunk in the result lazy @Text@.
 flush :: Builder
-flush = Builder $ \ k buf@(Buffer p o u l) ->
+flush = Builder $ \ k buf@(Buffer p o@(I# o#) u@(I# u#) l) ->
     if u == 0
     then k buf
     else do arr <- A.unsafeFreeze p
             let !b = Buffer p (o+u) 0 l
-                !t = Text arr o u
+                !t = Text $ js_toString (A.aBA arr) o# u#
             ts <- inlineInterleaveST (k b)
             return $! t : ts
 {-# INLINE [1] flush #-}
 -- defer inlining so that flush/flush rule may fire.
+-- flush = Builder $ \ k buf@(Buffer p o u l) ->
+--     if u == 0
+--     then k buf
+--     else do arr <- A.unsafeFreeze p
+--             let !b = Buffer p (o+u) 0 l
+--                 !t = Text arr o u
+--             ts <- inlineInterleaveST (k b)
+--             return $! t : ts
 
 ------------------------------------------------------------------------
 
@@ -327,3 +361,11 @@ append' (Builder f) (Builder g) = Builder (f . g)
     append flush flush = flush
 
  #-}
+
+foreign import javascript unsafe
+  "h$textFromString"
+  js_fromString :: JSString -> (# ByteArray#, Int# #)
+
+foreign import javascript unsafe
+  "h$textToString"
+  js_toString :: ByteArray# -> Int# -> Int# -> JSString

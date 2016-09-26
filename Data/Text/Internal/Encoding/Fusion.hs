@@ -55,7 +55,7 @@ import qualified Data.Text.Internal.Encoding.Utf32 as U32
 import Data.Text.Unsafe (unsafeDupablePerformIO)
 
 streamASCII :: ByteString -> Stream Char
-streamASCII bs = Stream next 0 (maxSize l)
+streamASCII bs = Stream next 0 -- (maxSize l)
     where
       l = B.length bs
       {-# INLINE next #-}
@@ -70,7 +70,7 @@ streamASCII bs = Stream next 0 (maxSize l)
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using UTF-8
 -- encoding.
 streamUtf8 :: OnDecodeError -> ByteString -> Stream Char
-streamUtf8 onErr bs = Stream next 0 (maxSize l)
+streamUtf8 onErr bs = Stream next 0 -- (maxSize l)
     where
       l = B.length bs
       next i
@@ -91,7 +91,7 @@ streamUtf8 onErr bs = Stream next 0 (maxSize l)
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using little
 -- endian UTF-16 encoding.
 streamUtf16LE :: OnDecodeError -> ByteString -> Stream Char
-streamUtf16LE onErr bs = Stream next 0 (maxSize (l `shiftR` 1))
+streamUtf16LE onErr bs = Stream next 0 -- (maxSize (l `shiftR` 1))
     where
       l = B.length bs
       {-# INLINE next #-}
@@ -109,7 +109,7 @@ streamUtf16LE onErr bs = Stream next 0 (maxSize (l `shiftR` 1))
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using big
 -- endian UTF-16 encoding.
 streamUtf16BE :: OnDecodeError -> ByteString -> Stream Char
-streamUtf16BE onErr bs = Stream next 0 (maxSize (l `shiftR` 1))
+streamUtf16BE onErr bs = Stream next 0 -- (maxSize (l `shiftR` 1))
     where
       l = B.length bs
       {-# INLINE next #-}
@@ -127,7 +127,7 @@ streamUtf16BE onErr bs = Stream next 0 (maxSize (l `shiftR` 1))
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using big
 -- endian UTF-32 encoding.
 streamUtf32BE :: OnDecodeError -> ByteString -> Stream Char
-streamUtf32BE onErr bs = Stream next 0 (maxSize (l `shiftR` 2))
+streamUtf32BE onErr bs = Stream next 0 -- (maxSize (l `shiftR` 2))
     where
       l = B.length bs
       {-# INLINE next #-}
@@ -147,7 +147,7 @@ streamUtf32BE onErr bs = Stream next 0 (maxSize (l `shiftR` 2))
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using little
 -- endian UTF-32 encoding.
 streamUtf32LE :: OnDecodeError -> ByteString -> Stream Char
-streamUtf32LE onErr bs = Stream next 0 (maxSize (l `shiftR` 2))
+streamUtf32LE onErr bs = Stream next 0 -- (maxSize (l `shiftR` 2))
     where
       l = B.length bs
       {-# INLINE next #-}
@@ -166,8 +166,10 @@ streamUtf32LE onErr bs = Stream next 0 (maxSize (l `shiftR` 2))
 
 -- | /O(n)/ Convert a 'Stream' 'Word8' to a 'ByteString'.
 unstream :: Stream Word8 -> ByteString
-unstream (Stream next s0 len) = unsafeDupablePerformIO $ do
-    let mlen = upperBound 4 len
+-- unstream (Stream next s0 len) = unsafeDupablePerformIO $ do
+unstream (Stream next s0) = unsafeDupablePerformIO $ do
+    -- let mlen = upperBound 4 len
+    let mlen = 4
     mallocByteString mlen >>= loop mlen 0 s0
     where
       loop !n !off !s fp = case next s of

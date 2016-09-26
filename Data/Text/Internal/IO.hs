@@ -95,7 +95,11 @@ unpack !buf !r !w
  | r >= w        = return T.empty
  | otherwise     = withRawBuffer buf go
  where
+#ifndef __GHCJS__
   go pbuf = return $! unstream (Stream next r (exactSize (w-r)))
+#else
+  go pbuf = return $! unstream (Stream next r)
+#endif
    where
     next !i | i >= w    = Done
             | otherwise = Yield (ix i) (i+1)
@@ -108,7 +112,11 @@ unpack_nl !buf !r !w
  | otherwise     = withRawBuffer buf $ go
  where
   go pbuf = do
+#ifndef __GHCJS__
     let !t = unstream (Stream next r (maxSize (w-r)))
+#else
+    let !t = unstream (Stream next r)
+#endif
         w' = w - 1
     return $ if ix w' == '\r'
              then (t,w')

@@ -88,13 +88,13 @@ library
     Data.Text.Array
     Data.Text.Encoding
     Data.Text.Encoding.Error
-    Data.Text.Foreign
+    -- Data.Text.Foreign
     Data.Text.IO
     Data.Text.Internal
     Data.Text.Internal.Builder
-    Data.Text.Internal.Builder.Functions
-    Data.Text.Internal.Builder.Int.Digits
-    Data.Text.Internal.Builder.RealFloat.Functions
+    -- Data.Text.Internal.Builder.Functions
+    -- Data.Text.Internal.Builder.Int.Digits
+    -- Data.Text.Internal.Builder.RealFloat.Functions
     Data.Text.Internal.Encoding.Fusion
     Data.Text.Internal.Encoding.Fusion.Common
     Data.Text.Internal.Encoding.Utf16
@@ -106,14 +106,14 @@ library
     Data.Text.Internal.Fusion.Common
     Data.Text.Internal.Fusion.Size
     Data.Text.Internal.Fusion.Types
-    Data.Text.Internal.IO
+    -- Data.Text.Internal.IO
     Data.Text.Internal.Lazy
-    Data.Text.Internal.Lazy.Encoding.Fusion
+    -- Data.Text.Internal.Lazy.Encoding.Fusion
     Data.Text.Internal.Lazy.Fusion
     Data.Text.Internal.Lazy.Search
-    Data.Text.Internal.Private
+    -- Data.Text.Internal.Private
     Data.Text.Internal.Read
-    Data.Text.Internal.Search
+    -- Data.Text.Internal.Search
     Data.Text.Internal.Unsafe
     Data.Text.Internal.Unsafe.Char
     Data.Text.Internal.Unsafe.Shift
@@ -124,18 +124,23 @@ library
     Data.Text.Lazy.Encoding
     Data.Text.Lazy.IO
     Data.Text.Lazy.Internal
-    Data.Text.Lazy.Read
+    -- Data.Text.Lazy.Read
     Data.Text.Read
     Data.Text.Unsafe
 
-  other-modules:
-    Data.Text.Show
+    --  moved from ghcjs-base
+    -- reflex-dom depends in it
+    Data.JSString.Text
+  -- other-modules:
+  --   Data.Text.Show
 
   build-depends:
-    array      >= 0.3,
+    -- array      >= 0.3,
     base       >= 4.2 && < 5,
     binary,
     deepseq    >= 1.1.0.0,
+    ghcjs-base,
+    ghcjs-prim,
     ghc-prim   >= 0.2
 
   if flag(bytestring-builder)
@@ -158,51 +163,51 @@ library
     cpp-options: -DINTEGER_GMP
     build-depends: integer-gmp >= 0.2
 
-test-suite tests
-  type:           exitcode-stdio-1.0
-  hs-source-dirs: tests .
-  main-is:        Tests.hs
-  c-sources:      cbits/cbits.c
-  include-dirs:   include
+-- test-suite tests
+--   type:           exitcode-stdio-1.0
+--   hs-source-dirs: tests .
+--   main-is:        Tests.hs
+--   c-sources:      cbits/cbits.c
+--   include-dirs:   include
 
-  ghc-options:
-    -Wall -threaded -O0 -rtsopts
+--   ghc-options:
+--     -Wall -threaded -O0 -rtsopts
 
-  cpp-options:
-    -DASSERTS -DHAVE_DEEPSEQ -DTEST_SUITE
+--   cpp-options:
+--     -DASSERTS -DHAVE_DEEPSEQ -DTEST_SUITE
 
-  build-depends:
-    HUnit >= 1.2,
-    QuickCheck >= 2.7,
-    array,
-    base,
-    binary,
-    deepseq,
-    directory,
-    ghc-prim,
-    quickcheck-unicode,
-    random,
-    test-framework >= 0.4,
-    test-framework-hunit >= 0.2,
-    test-framework-quickcheck2 >= 0.2
+--   build-depends:
+--     HUnit >= 1.2,
+--     QuickCheck >= 2.7,
+--     array,
+--     base,
+--     binary,
+--     deepseq,
+--     directory,
+--     ghc-prim,
+--     quickcheck-unicode,
+--     random,
+--     test-framework >= 0.4,
+--     test-framework-hunit >= 0.2,
+--     test-framework-quickcheck2 >= 0.2
 
-  if flag(bytestring-builder)
-    build-depends: bytestring         >= 0.9    && < 0.10.4,
-                   bytestring-builder >= 0.10.4
-  else
-    build-depends: bytestring         >= 0.10.4
+--   if flag(bytestring-builder)
+--     build-depends: bytestring         >= 0.9    && < 0.10.4,
+--                    bytestring-builder >= 0.10.4
+--   else
+--     build-depends: bytestring         >= 0.10.4
 
-  if flag(integer-simple)
-    cpp-options: -DINTEGER_SIMPLE
-    build-depends: integer-simple >= 0.1 && < 0.5
-  else
-    cpp-options: -DINTEGER_GMP
-    build-depends: integer-gmp >= 0.2
+--   if flag(integer-simple)
+--     cpp-options: -DINTEGER_SIMPLE
+--     build-depends: integer-simple >= 0.1 && < 0.5
+--   else
+--     cpp-options: -DINTEGER_GMP
+--     build-depends: integer-gmp >= 0.2
 
-source-repository head
-  type:     git
-  location: https://github.com/bos/text
+-- source-repository head
+--   type:     git
+--   location: https://github.com/bos/text
 
-source-repository head
-  type:     mercurial
-  location: https://bitbucket.org/bos/text
+-- source-repository head
+--   type:     mercurial
+--   location: https://bitbucket.org/bos/text

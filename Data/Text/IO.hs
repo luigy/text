@@ -185,7 +185,11 @@ hPutStr h t = do
          | otherwise         -> writeBlocksRaw h buf str
 
 hPutChars :: Handle -> Stream Char -> IO ()
+#ifndef __GHCJS__
 hPutChars h (Stream next0 s0 _len) = loop s0
+#else
+hPutChars h (Stream next0 s0) = loop s0
+#endif
   where
     loop !s = case next0 s of
                 Done       -> return ()
@@ -203,7 +207,11 @@ hPutChars h (Stream next0 s0 _len) = loop s0
 -- handling gave a few more percent on top.
 
 writeLines :: Handle -> Newline -> Buffer CharBufElem -> Stream Char -> IO ()
+#ifndef __GHCJS__
 writeLines h nl buf0 (Stream next0 s0 _len) = outer s0 buf0
+#else
+writeLines h nl buf0 (Stream next0 s0) = outer s0 buf0
+#endif
  where
   outer s1 Buffer{bufRaw=raw, bufSize=len} = inner s1 (0::Int)
    where
@@ -223,7 +231,11 @@ writeLines h nl buf0 (Stream next0 s0 _len) = outer s0 buf0
     commit = commitBuffer h raw len
 
 writeBlocksCRLF :: Handle -> Buffer CharBufElem -> Stream Char -> IO ()
+#ifndef __GHCJS__
 writeBlocksCRLF h buf0 (Stream next0 s0 _len) = outer s0 buf0
+#else
+writeBlocksCRLF h buf0 (Stream next0 s0) = outer s0 buf0
+#endif
  where
   outer s1 Buffer{bufRaw=raw, bufSize=len} = inner s1 (0::Int)
    where
@@ -239,7 +251,11 @@ writeBlocksCRLF h buf0 (Stream next0 s0 _len) = outer s0 buf0
     commit = commitBuffer h raw len
 
 writeBlocksRaw :: Handle -> Buffer CharBufElem -> Stream Char -> IO ()
+#ifndef __GHCJS__
 writeBlocksRaw h buf0 (Stream next0 s0 _len) = outer s0 buf0
+#else
+writeBlocksRaw h buf0 (Stream next0 s0) = outer s0 buf0
+#endif
  where
   outer s1 Buffer{bufRaw=raw, bufSize=len} = inner s1 (0::Int)
    where

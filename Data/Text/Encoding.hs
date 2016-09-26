@@ -3,6 +3,7 @@
 #if __GLASGOW_HASKELL__ >= 702
 {-# LANGUAGE Trustworthy #-}
 #endif
+{-# LANGUAGE UnboxedTuples #-}
 -- |
 -- Module      : Data.Text.Encoding
 -- Copyright   : (c) 2009, 2010, 2011 Bryan O'Sullivan,
@@ -73,10 +74,10 @@ import Data.ByteString as B
 import Data.ByteString.Internal as B hiding (c2w)
 import Data.Text.Encoding.Error (OnDecodeError, UnicodeException, strictDecode)
 import Data.Text.Internal (Text(..), safe, text)
-import Data.Text.Internal.Private (runText)
+-- import Data.Text.Internal.Private (runText)
 import Data.Text.Internal.Unsafe.Char (ord, unsafeWrite)
 import Data.Text.Internal.Unsafe.Shift (shiftR)
-import Data.Text.Show ()
+-- import Data.Text.Show ()
 import Data.Text.Unsafe (unsafeDupablePerformIO)
 import Data.Word (Word8, Word32)
 import Foreign.C.Types (CSize(..))
@@ -94,7 +95,23 @@ import qualified Data.Text.Internal.Encoding.Fusion as E
 import qualified Data.Text.Internal.Encoding.Utf16 as U16
 import qualified Data.Text.Internal.Fusion as F
 
+import GHC.Exts (ByteArray#, Int(..), Int#, Any)
+{-
 #include "text_cbits.h"
+-}
+
+import Data.Text.Encoding.Error (OnDecodeError, UnicodeException, strictDecode)
+import Data.ByteString (ByteString)
+import Data.Text.Internal (Text)
+
+-------------------------------------
+import GHCJS.Types
+import GHCJS.Buffer
+import Data.JSString (JSString)
+import Unsafe.Coerce
+import System.IO.Unsafe
+-------------------------------------
+
 
 -- $strict
 --
@@ -120,39 +137,55 @@ decodeASCII = decodeUtf8
 -- 'decodeLatin1' is semantically equivalent to
 --  @Data.Text.pack . Data.ByteString.Char8.unpack@
 decodeLatin1 :: ByteString -> Text
-decodeLatin1 (PS fp off len) = text a 0 len
- where
-  a = A.run (A.new len >>= unsafeIOToST . go)
-  go dest = withForeignPtr fp $ \ptr -> do
-    c_decode_latin1 (A.maBA dest) (ptr `plusPtr` off) (ptr `plusPtr` (off+len))
-    return dest
+decodeLatin1 = error "decodeLatin1"
+-- decodeLatin1 (PS fp off len) = text a 0 len
+--  where
+--   a = A.run (A.new len >>= unsafeIOToST . go)
+--   go dest = withForeignPtr fp $ \ptr -> do
+--     c_decode_latin1 (A.maBA dest) (ptr `plusPtr` off) (ptr `plusPtr` (off+len))
+--     return dest
+
+-- foreign import javascript unsafe "h$textToString" js_toString :: JSVal -> Text
+
+foreign import javascript unsafe "h$textFromString" js_fromString :: JSString -> (# ByteArray#, Int# #)
+foreign import javascript unsafe "String['fromCharCode']['apply'](null, $1['u8'])" js_decodeBytes :: JSVal -> JSString
+foreign import javascript unsafe "h$decodeUtf8z($1, $2)" js_fromByteStringBuffer :: Buffer -> Int -> JSString
+foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8 :: JSString -> Buffer
+foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8Mut :: JSString -> MutableBuffer
+foreign import javascript unsafe "h$encodeUtf16($1)" js_encodeUtf16 :: JSString -> Buffer
+foreign import javascript unsafe "$1['length']" js_length :: JSString -> Int
+foreign import javascript unsafe "h$jsstringTake" js_take :: Int -> JSString -> JSString
 
 -- | Decode a 'ByteString' containing UTF-8 encoded text.
 decodeUtf8With :: OnDecodeError -> ByteString -> Text
-decodeUtf8With onErr (PS fp off len) = runText $ \done -> do
-  let go dest = withForeignPtr fp $ \ptr ->
-        with (0::CSize) $ \destOffPtr -> do
-          let end = ptr `plusPtr` (off + len)
-              loop curPtr = do
-                curPtr' <- c_decode_utf8 (A.maBA dest) destOffPtr curPtr end
-                if curPtr' == end
-                  then do
-                    n <- peek destOffPtr
-                    unsafeSTToIO (done dest (fromIntegral n))
-                  else do
-                    x <- peek curPtr'
-                    case onErr desc (Just x) of
-                      Nothing -> loop $ curPtr' `plusPtr` 1
-                      Just c -> do
-                        destOff <- peek destOffPtr
-                        w <- unsafeSTToIO $
-                             unsafeWrite dest (fromIntegral destOff) (safe c)
-                        poke destOffPtr (destOff + fromIntegral w)
-                        loop $ curPtr' `plusPtr` 1
-          loop (ptr `plusPtr` off)
-  (unsafeIOToST . go) =<< A.new len
- where
-  desc = "Data.Text.Internal.Encoding.decodeUtf8: Invalid UTF-8 stream"
+-- decodeUtf8With _ bs@(PS fp off len) = Text $ js_decodeBytes $ unsafeCoerce bs
+  -- decodeUtf8With _ bs = Text $ js_fromByteStringBuffer buf off
+decodeUtf8With _ bs = Text $ js_take (len) $ js_fromByteStringBuffer buf off
+  where (buf, off, len) = fromByteString bs
+-- decodeUtf8With onErr (PS fp off len) = runText $ \done -> do
+ --  let go dest = withForeignPtr fp $ \ptr ->
+ --        with (0::CSize) $ \destOffPtr -> do
+ --          let end = ptr `plusPtr` (off + len)
+ --              loop curPtr = do
+ --                curPtr' <- c_decode_utf8 (A.maBA dest) destOffPtr curPtr end
+ --                if curPtr' == end
+ --                  then do
+ --                    n <- peek destOffPtr
+ --                    unsafeSTToIO (done dest (fromIntegral n))
+ --                  else do
+ --                    x <- peek curPtr'
+ --                    case onErr desc (Just x) of
+ --                      Nothing -> loop $ curPtr' `plusPtr` 1
+ --                      Just c -> do
+ --                        destOff <- peek destOffPtr
+ --                        w <- unsafeSTToIO $
+ --                             unsafeWrite dest (fromIntegral destOff) (safe c)
+ --                        poke destOffPtr (destOff + fromIntegral w)
+ --                        loop $ curPtr' `plusPtr` 1
+ --          loop (ptr `plusPtr` off)
+ --  (unsafeIOToST . go) =<< A.new len
+ -- where
+ --  desc = "Data.Text.Internal.Encoding.decodeUtf8: Invalid UTF-8 stream"
 {- INLINE[0] decodeUtf8With #-}
 
 -- $stream
@@ -252,8 +285,9 @@ streamDecodeUtf8With onErr = decodeChunk B.empty 0 0
         let end = ptr `plusPtr` (off + len)
             loop curPtr = do
               poke curPtrPtr curPtr
-              curPtr' <- c_decode_utf8_with_state (A.maBA dest) destOffPtr
-                         curPtrPtr end codepointPtr statePtr
+              curPtr' <- error "c_decode_utf8_with_state: needs to be implemented"
+              -- curPtr' <- c_decode_utf8_with_state (A.maBA dest) destOffPtr
+              --            curPtrPtr end codepointPtr statePtr
               state <- peek statePtr
               case state of
                 UTF8_REJECT -> do
@@ -296,8 +330,8 @@ streamDecodeUtf8With onErr = decodeChunk B.empty 0 0
 decodeUtf8 :: ByteString -> Text
 decodeUtf8 = decodeUtf8With strictDecode
 {-# INLINE[0] decodeUtf8 #-}
-{-# RULES "STREAM stream/decodeUtf8 fusion" [1]
-    forall bs. F.stream (decodeUtf8 bs) = E.streamUtf8 strictDecode bs #-}
+-- {-# RULES "STREAM stream/decodeUtf8 fusion" [1]
+--     forall bs. F.stream (decodeUtf8 bs) = E.streamUtf8 strictDecode bs #-}
 
 -- | Decode a 'ByteString' containing UTF-8 encoded text.
 --
@@ -326,9 +360,13 @@ encodeUtf8BuilderEscaped be =
   where
     bound = max 4 $ BP.sizeBound be
 
-    mkBuildstep (Text arr off len) !k =
+    mkBuildstep (Text t) !k =
+    -- mkBuildstep (Text arr off len) !k =
         outerLoop off
       where
+        off = 0
+        (arr, len) = let (# ba, len' #) = js_fromString t
+                     in (A.Array ba, I# len')
         iend = off + len
 
         outerLoop !i0 !br@(B.BufferRange op0 ope)
@@ -368,24 +406,27 @@ encodeUtf8BuilderEscaped be =
                   where
                     poke8 j v = poke (op `plusPtr` j) (fromIntegral v :: Word8)
 
+
+
 -- | Encode text using UTF-8 encoding.
 encodeUtf8 :: Text -> ByteString
-encodeUtf8 (Text arr off len)
-  | len == 0  = B.empty
-  | otherwise = unsafeDupablePerformIO $ do
-  fp <- mallocByteString (len*4)
-  withForeignPtr fp $ \ptr ->
-    with ptr $ \destPtr -> do
-      c_encode_utf8 destPtr (A.aBA arr) (fromIntegral off) (fromIntegral len)
-      newDest <- peek destPtr
-      let utf8len = newDest `minusPtr` ptr
-      if utf8len >= len `shiftR` 1
-        then return (PS fp 0 utf8len)
-        else do
-          fp' <- mallocByteString utf8len
-          withForeignPtr fp' $ \ptr' -> do
-            memcpy ptr' ptr (fromIntegral utf8len)
-            return (PS fp' 0 utf8len)
+encodeUtf8 (Text txt) = toByteString 0 (Just (js_length txt)) $ js_encodeUtf8 txt
+-- encodeUtf8 (Text arr off len)
+--   | len == 0  = B.empty
+--   | otherwise = unsafeDupablePerformIO $ do
+--   fp <- mallocByteString (len*4)
+--   withForeignPtr fp $ \ptr ->
+--     with ptr $ \destPtr -> do
+--       c_encode_utf8 destPtr (A.aBA arr) (fromIntegral off) (fromIntegral len)
+--       newDest <- peek destPtr
+--       let utf8len = newDest `minusPtr` ptr
+--       if utf8len >= len `shiftR` 1
+--         then return (PS fp 0 utf8len)
+--         else do
+--           fp' <- mallocByteString utf8len
+--           withForeignPtr fp' $ \ptr' -> do
+--             memcpy ptr' ptr (fromIntegral utf8len)
+--             return (PS fp' 0 utf8len)
 
 -- | Decode text from little endian UTF-16 encoding.
 decodeUtf16LEWith :: OnDecodeError -> ByteString -> Text
@@ -463,17 +504,17 @@ encodeUtf32BE :: Text -> ByteString
 encodeUtf32BE txt = E.unstream (E.restreamUtf32BE (F.stream txt))
 {-# INLINE encodeUtf32BE #-}
 
-foreign import ccall unsafe "_hs_text_decode_utf8" c_decode_utf8
-    :: MutableByteArray# s -> Ptr CSize
-    -> Ptr Word8 -> Ptr Word8 -> IO (Ptr Word8)
+-- foreign import ccall unsafe "_hs_text_decode_utf8" c_decode_utf8
+--     :: MutableByteArray# s -> Ptr CSize
+--     -> Ptr Word8 -> Ptr Word8 -> IO (Ptr Word8)
 
-foreign import ccall unsafe "_hs_text_decode_utf8_state" c_decode_utf8_with_state
-    :: MutableByteArray# s -> Ptr CSize
-    -> Ptr (Ptr Word8) -> Ptr Word8
-    -> Ptr CodePoint -> Ptr DecoderState -> IO (Ptr Word8)
+-- foreign import ccall unsafe "_hs_text_decode_utf8_state" c_decode_utf8_with_state
+--     :: MutableByteArray# s -> Ptr CSize
+--     -> Ptr (Ptr Word8) -> Ptr Word8
+--     -> Ptr CodePoint -> Ptr DecoderState -> IO (Ptr Word8)
 
-foreign import ccall unsafe "_hs_text_decode_latin1" c_decode_latin1
-    :: MutableByteArray# s -> Ptr Word8 -> Ptr Word8 -> IO ()
+-- foreign import ccall unsafe "_hs_text_decode_latin1" c_decode_latin1
+--     :: MutableByteArray# s -> Ptr Word8 -> Ptr Word8 -> IO ()
 
-foreign import ccall unsafe "_hs_text_encode_utf8" c_encode_utf8
-    :: Ptr (Ptr Word8) -> ByteArray# -> CSize -> CSize -> IO ()
+-- foreign import ccall unsafe "_hs_text_encode_utf8" c_encode_utf8
+--     :: Ptr (Ptr Word8) -> ByteArray# -> CSize -> CSize -> IO ()

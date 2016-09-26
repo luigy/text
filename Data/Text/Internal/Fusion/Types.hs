@@ -19,104 +19,107 @@
 
 module Data.Text.Internal.Fusion.Types
     (
-      CC(..)
-    , PairS(..)
-    , Scan(..)
-    , RS(..)
-    , Step(..)
-    , Stream(..)
-    , empty
+    --   CC(..)
+    -- , PairS(..)
+    -- , Scan(..)
+    -- , RS(..)
+    -- , Step(..)
+    -- , Stream(..)
+    -- , empty
+      module Data.JSString.Internal.Fusion.Types
     ) where
 
-import Data.Text.Internal.Fusion.Size
-import Data.Word (Word8)
+-- import Data.Text.Internal.Fusion.Size
+-- import Data.Word (Word8)
 
--- | Specialised tuple for case conversion.
-data CC s = CC !s {-# UNPACK #-} !Char {-# UNPACK #-} !Char
+import Data.JSString.Internal.Fusion.Types
 
--- | Restreaming state.
-data RS s
-    = RS0 !s
-    | RS1 !s {-# UNPACK #-} !Word8
-    | RS2 !s {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8
-    | RS3 !s {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8
+-- -- | Specialised tuple for case conversion.
+-- data CC s = CC !s {-# UNPACK #-} !Char {-# UNPACK #-} !Char
 
--- | Strict pair.
-data PairS a b = !a :*: !b
-                 -- deriving (Eq, Ord, Show)
-infixl 2 :*:
+-- -- | Restreaming state.
+-- data RS s
+--     = RS0 !s
+--     | RS1 !s {-# UNPACK #-} !Word8
+--     | RS2 !s {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8
+--     | RS3 !s {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8 {-# UNPACK #-} !Word8
 
--- | An intermediate result in a scan.
-data Scan s = Scan1 {-# UNPACK #-} !Char !s
-            | Scan2 {-# UNPACK #-} !Char !s
+-- -- | Strict pair.
+-- data PairS a b = !a :*: !b
+--                  -- deriving (Eq, Ord, Show)
+-- infixl 2 :*:
 
--- | Intermediate result in a processing pipeline.
-data Step s a = Done
-              | Skip !s
-              | Yield !a !s
+-- -- | An intermediate result in a scan.
+-- data Scan s = Scan1 {-# UNPACK #-} !Char !s
+--             | Scan2 {-# UNPACK #-} !Char !s
 
-{-
-instance (Show a) => Show (Step s a)
-    where show Done        = "Done"
-          show (Skip _)    = "Skip"
-          show (Yield x _) = "Yield " ++ show x
--}
+-- -- | Intermediate result in a processing pipeline.
+-- data Step s a = Done
+--               | Skip !s
+--               | Yield !a !s
 
-instance (Eq a) => Eq (Stream a) where
-    (==) = eq
+-- {-
+-- instance (Show a) => Show (Step s a)
+--     where show Done        = "Done"
+--           show (Skip _)    = "Skip"
+--           show (Yield x _) = "Yield " ++ show x
+-- -}
 
-instance (Ord a) => Ord (Stream a) where
-    compare = cmp
+-- instance (Eq a) => Eq (Stream a) where
+--     (==) = eq
 
--- The length hint in a Stream has two roles.  If its value is zero,
--- we trust it, and treat the stream as empty.  Otherwise, we treat it
--- as a hint: it should usually be accurate, so we use it when
--- unstreaming to decide what size array to allocate.  However, the
--- unstreaming functions must be able to cope with the hint being too
--- small or too large.
---
--- The size hint tries to track the UTF-16 code points in a stream,
--- but often counts the number of characters instead.  It can easily
--- undercount if, for instance, a transformed stream contains astral
--- plane characters (those above 0x10000).
+-- instance (Ord a) => Ord (Stream a) where
+--     compare = cmp
 
-data Stream a =
-    forall s. Stream
-    (s -> Step s a)             -- stepper function
-    !s                          -- current state
-    !Size                       -- size hint
+-- -- The length hint in a Stream has two roles.  If its value is zero,
+-- -- we trust it, and treat the stream as empty.  Otherwise, we treat it
+-- -- as a hint: it should usually be accurate, so we use it when
+-- -- unstreaming to decide what size array to allocate.  However, the
+-- -- unstreaming functions must be able to cope with the hint being too
+-- -- small or too large.
+-- --
+-- -- The size hint tries to track the UTF-16 code points in a stream,
+-- -- but often counts the number of characters instead.  It can easily
+-- -- undercount if, for instance, a transformed stream contains astral
+-- -- plane characters (those above 0x10000).
 
--- | /O(n)/ Determines if two streams are equal.
-eq :: (Eq a) => Stream a -> Stream a -> Bool
-eq (Stream next1 s1 _) (Stream next2 s2 _) = loop (next1 s1) (next2 s2)
-    where
-      loop Done Done                     = True
-      loop (Skip s1')     (Skip s2')     = loop (next1 s1') (next2 s2')
-      loop (Skip s1')     x2             = loop (next1 s1') x2
-      loop x1             (Skip s2')     = loop x1          (next2 s2')
-      loop Done _                        = False
-      loop _    Done                     = False
-      loop (Yield x1 s1') (Yield x2 s2') = x1 == x2 &&
-                                           loop (next1 s1') (next2 s2')
-{-# INLINE [0] eq #-}
+-- data Stream a =
+--     forall s. Stream
+--     (s -> Step s a)             -- stepper function
+--     !s                          -- current state
+--     !Size                       -- size hint
 
-cmp :: (Ord a) => Stream a -> Stream a -> Ordering
-cmp (Stream next1 s1 _) (Stream next2 s2 _) = loop (next1 s1) (next2 s2)
-    where
-      loop Done Done                     = EQ
-      loop (Skip s1')     (Skip s2')     = loop (next1 s1') (next2 s2')
-      loop (Skip s1')     x2             = loop (next1 s1') x2
-      loop x1             (Skip s2')     = loop x1          (next2 s2')
-      loop Done _                        = LT
-      loop _    Done                     = GT
-      loop (Yield x1 s1') (Yield x2 s2') =
-          case compare x1 x2 of
-            EQ    -> loop (next1 s1') (next2 s2')
-            other -> other
-{-# INLINE [0] cmp #-}
+-- -- | /O(n)/ Determines if two streams are equal.
+-- eq :: (Eq a) => Stream a -> Stream a -> Bool
+-- eq (Stream next1 s1 _) (Stream next2 s2 _) = loop (next1 s1) (next2 s2)
+--     where
+--       loop Done Done                     = True
+--       loop (Skip s1')     (Skip s2')     = loop (next1 s1') (next2 s2')
+--       loop (Skip s1')     x2             = loop (next1 s1') x2
+--       loop x1             (Skip s2')     = loop x1          (next2 s2')
+--       loop Done _                        = False
+--       loop _    Done                     = False
+--       loop (Yield x1 s1') (Yield x2 s2') = x1 == x2 &&
+--                                            loop (next1 s1') (next2 s2')
+-- {-# INLINE [0] eq #-}
 
--- | The empty stream.
-empty :: Stream a
-empty = Stream next () 0
-    where next _ = Done
-{-# INLINE [0] empty #-}
+-- cmp :: (Ord a) => Stream a -> Stream a -> Ordering
+-- cmp (Stream next1 s1 _) (Stream next2 s2 _) = loop (next1 s1) (next2 s2)
+--     where
+--       loop Done Done                     = EQ
+--       loop (Skip s1')     (Skip s2')     = loop (next1 s1') (next2 s2')
+--       loop (Skip s1')     x2             = loop (next1 s1') x2
+--       loop x1             (Skip s2')     = loop x1          (next2 s2')
+--       loop Done _                        = LT
+--       loop _    Done                     = GT
+--       loop (Yield x1 s1') (Yield x2 s2') =
+--           case compare x1 x2 of
+--             EQ    -> loop (next1 s1') (next2 s2')
+--             other -> other
+-- {-# INLINE [0] cmp #-}
+
+-- -- | The empty stream.
+-- empty :: Stream a
+-- empty = Stream next () 0
+--     where next _ = Done
+-- {-# INLINE [0] empty #-}

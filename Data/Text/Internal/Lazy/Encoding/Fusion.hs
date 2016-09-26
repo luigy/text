@@ -38,7 +38,9 @@ import qualified Data.ByteString.Unsafe as B
 import Data.Text.Internal.Encoding.Fusion.Common
 import Data.Text.Encoding.Error
 import Data.Text.Internal.Fusion (Step(..), Stream(..))
+#ifndef __GHCJS__
 import Data.Text.Internal.Fusion.Size
+#endif
 import Data.Text.Internal.Unsafe.Char (unsafeChr, unsafeChr8, unsafeChr32)
 import Data.Text.Internal.Unsafe.Shift (shiftL)
 import Data.Word (Word8, Word16, Word32)
@@ -65,7 +67,11 @@ data T = T !ByteString !S {-# UNPACK #-} !Int
 -- | /O(n)/ Convert a lazy 'ByteString' into a 'Stream Char', using
 -- UTF-8 encoding.
 streamUtf8 :: OnDecodeError -> ByteString -> Stream Char
+#ifndef __GHCJS__
 streamUtf8 onErr bs0 = Stream next (T bs0 S0 0) unknownSize
+#else
+streamUtf8 onErr bs0 = Stream next (T bs0 S0 0) -- unknownSize
+#endif
   where
     next (T bs@(Chunk ps _) S0 i)
       | i < len && U8.validate1 a =
@@ -107,7 +113,11 @@ streamUtf8 onErr bs0 = Stream next (T bs0 S0 0) unknownSize
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using little
 -- endian UTF-16 encoding.
 streamUtf16LE :: OnDecodeError -> ByteString -> Stream Char
+#ifndef __GHCJS__
 streamUtf16LE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
+#else
+streamUtf16LE onErr bs0 = Stream next (T bs0 S0 0) -- unknownSize
+#endif
   where
     next (T bs@(Chunk ps _) S0 i)
       | i + 1 < len && U16.validate1 x1 =
@@ -147,7 +157,11 @@ streamUtf16LE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using big
 -- endian UTF-16 encoding.
 streamUtf16BE :: OnDecodeError -> ByteString -> Stream Char
+#ifndef __GHCJS__
 streamUtf16BE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
+#else
+streamUtf16BE onErr bs0 = Stream next (T bs0 S0 0) -- unknownSize
+#endif
   where
     next (T bs@(Chunk ps _) S0 i)
       | i + 1 < len && U16.validate1 x1 =
@@ -187,7 +201,11 @@ streamUtf16BE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using big
 -- endian UTF-32 encoding.
 streamUtf32BE :: OnDecodeError -> ByteString -> Stream Char
+#ifndef __GHCJS__
 streamUtf32BE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
+#else
+streamUtf32BE onErr bs0 = Stream next (T bs0 S0 0) -- unknownSize
+#endif
   where
     next (T bs@(Chunk ps _) S0 i)
       | i + 3 < len && U32.validate x =
@@ -231,7 +249,11 @@ streamUtf32BE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
 -- | /O(n)/ Convert a 'ByteString' into a 'Stream Char', using little
 -- endian UTF-32 encoding.
 streamUtf32LE :: OnDecodeError -> ByteString -> Stream Char
+#ifndef __GHCJS__
 streamUtf32LE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
+#else
+streamUtf32LE onErr bs0 = Stream next (T bs0 S0 0) -- unknownSize
+#endif
   where
     next (T bs@(Chunk ps _) S0 i)
       | i + 3 < len && U32.validate x =
@@ -274,7 +296,11 @@ streamUtf32LE onErr bs0 = Stream next (T bs0 S0 0) unknownSize
 
 -- | /O(n)/ Convert a 'Stream' 'Word8' to a lazy 'ByteString'.
 unstreamChunks :: Int -> Stream Word8 -> ByteString
+#ifndef __GHCJS__
 unstreamChunks chunkSize (Stream next s0 len0) = chunk s0 (upperBound 4 len0)
+#else
+unstreamChunks chunkSize (Stream next s0) = chunk s0 4
+#endif
   where chunk s1 len1 = unsafeDupablePerformIO $ do
           let len = max 4 (min len1 chunkSize)
           mallocByteString len >>= loop len 0 s1

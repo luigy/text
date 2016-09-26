@@ -1,4 +1,7 @@
 {-# LANGUAGE BangPatterns, ScopedTypeVariables #-}
+{-# LANGUAGE ForeignFunctionInterface, UnliftedFFITypes, JavaScriptFFI,
+    UnboxedTuples, DeriveDataTypeable, GHCForeignImportPrim,
+    MagicHash, FlexibleInstances, BangPatterns, Rank2Types, CPP #-}
 
 -- |
 -- Module      : Data.Text.Lazy.Search
@@ -31,6 +34,17 @@ import Data.Text.Internal.Lazy (Text(..), foldlChunks)
 import Data.Bits ((.|.), (.&.))
 import Data.Text.Internal.Unsafe.Shift (shiftL)
 
+import Data.JSString (JSString)
+import qualified Data.Text as TT
+import GHC.Exts (Int(..), Int#, ByteArray#)
+
+foreign import javascript unsafe
+  "h$textFromString"
+  js_fromString :: JSString -> (# ByteArray#, Int# #)
+
+fromString :: T.Text -> (# ByteArray#, Int# #)
+fromString (T.Text txt) = js_fromString txt
+
 -- | /O(n+m)/ Find the offsets of all non-overlapping indices of
 -- @needle@ within @haystack@.
 --
@@ -47,8 +61,10 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
     | nlen == 1  = indicesOne (nindex 0) 0 k ks
     | otherwise  = advance k ks 0 0
   where
-    advance x@(T.Text _ _ l) xs = scan
+    -- advance x@(T.Text _ _ l) xs = scan
+    advance x xs = scan
      where
+      l = TT.length x
       scan !g !i
          | i >= m = case xs of
                       Empty           -> []
@@ -72,11 +88,23 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
     nlast     = nlen - 1
     nindex    = index n ns
     z         = foldlChunks fin 0 needle
-        where fin _ (T.Text farr foff flen) = A.unsafeIndex farr (foff+flen-1)
+        where
+          -- fin _ (T.Text farr foff flen) =
+          fin _ t =
+            let foff = 0
+                (farr, flen) =
+                  let (# ba, len #) = fromString t
+                  in (A.Array ba, I# len)
+            in A.unsafeIndex farr (foff+flen-1)
     (mask :: Word64) :*: skip = buildTable n ns 0 0 0 (nlen-2)
     swizzle w = 1 `shiftL` (fromIntegral w .&. 0x3f)
-    buildTable (T.Text xarr xoff xlen) xs = go
+    -- buildTable (T.Text xarr xoff xlen) xs = go
+    buildTable t xs = go
       where
+        xoff = 0
+        (xarr, xlen) =
+          let (# ba, len #) = fromString t
+          in (A.Array ba, I# len)
         go !(g::Int64) !i !msk !skp
             | i >= xlast = case xs of
                              Empty      -> (msk .|. swizzle z) :*: skp
@@ -91,17 +119,22 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
     -- given offset would fail.
     lackingHay q = go 0
       where
-        go p (T.Text _ _ l) ps = p' < q && case ps of
-                                             Empty      -> True
-                                             Chunk r rs -> go p' r rs
-            where p' = p + fromIntegral l
+        -- go p (T.Text _ _ l) ps = p' < q && case ps of
+        go p t ps = p' < q && case ps of
+                                Empty      -> True
+                                Chunk r rs -> go p' r rs
+            where
+              l = TT.length t
+              p' = p + fromIntegral l
+
 indices _ _ = []
 
 -- | Fast index into a partly unpacked 'Text'.  We take into account
 -- the possibility that the caller might try to access one element
 -- past the end.
 index :: T.Text -> Text -> Int64 -> Word16
-index (T.Text arr off len) xs !i
+-- index (T.Text arr off len) xs !i
+index t xs !i
     | j < len   = A.unsafeIndex arr (off+j)
     | otherwise = case xs of
                     Empty
@@ -110,14 +143,24 @@ index (T.Text arr off len) xs !i
                         -- should never happen, due to lackingHay above
                         | otherwise -> emptyError "index"
                     Chunk c cs -> index c cs (i-fromIntegral len)
-    where j = fromIntegral i
+    where
+      j = fromIntegral i
+      off = 0
+      (arr, len) =
+        let (# ba, len' #) = fromString t
+        in (A.Array ba, I# len')
 
 -- | A variant of 'indices' that scans linearly for a single 'Word16'.
 indicesOne :: Word16 -> Int64 -> T.Text -> Text -> [Int64]
 indicesOne c = chunk
   where
-    chunk !i (T.Text oarr ooff olen) os = go 0
+    -- chunk !i (T.Text oarr ooff olen) os = go 0
+    chunk !i t os = go 0
       where
+        ooff = 0
+        (oarr, olen) =
+          let (# ba, len #) = fromString t
+          in (A.Array ba, I# len)
         go h | h >= olen = case os of
                              Empty      -> []
                              Chunk y ys -> chunk (i+fromIntegral olen) y ys
@@ -128,7 +171,8 @@ indicesOne c = chunk
 -- | The number of 'Word16' values in a 'Text'.
 wordLength :: Text -> Int64
 wordLength = foldlChunks sumLength 0
-    where sumLength i (T.Text _ _ l) = i + fromIntegral l
+    where sumLength i t = i + fromIntegral (TT.length t)
+    -- where sumLength i (T.Text _ _ l) = i + fromIntegral l
 
 emptyError :: String -> a
 emptyError fun = error ("Data.Text.Lazy.Search." ++ fun ++ ": empty input")

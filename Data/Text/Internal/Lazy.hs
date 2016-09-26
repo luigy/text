@@ -44,6 +44,10 @@ import Data.Typeable (Typeable)
 import Foreign.Storable (sizeOf)
 import qualified Data.Text.Internal as T
 
+-- GHCJS
+import qualified Data.Text as TT
+--
+
 data Text = Empty
           | Chunk {-# UNPACK #-} !T.Text Text
             deriving (Typeable)
@@ -57,18 +61,20 @@ data Text = Empty
 -- | Check the invariant strictly.
 strictInvariant :: Text -> Bool
 strictInvariant Empty = True
-strictInvariant x@(Chunk (T.Text _ _ len) cs)
-    | len > 0   = strictInvariant cs
-    | otherwise = error $ "Data.Text.Lazy: invariant violation: "
-                  ++ showStructure x
+-- TODO only used for QuickCheck ?
+-- strictInvariant x@(Chunk (T.Text _ _ len) cs)
+--     | len > 0   = strictInvariant cs
+--     | otherwise = error $ "Data.Text.Lazy: invariant violation: "
+--                   ++ showStructure x
 
 -- | Check the invariant lazily.
 lazyInvariant :: Text -> Text
 lazyInvariant Empty = Empty
-lazyInvariant x@(Chunk c@(T.Text _ _ len) cs)
-    | len > 0   = Chunk c (lazyInvariant cs)
-    | otherwise = error $ "Data.Text.Lazy: invariant violation: "
-                  ++ showStructure x
+-- TODO only used for quickcheck
+-- lazyInvariant x@(Chunk c@(T.Text _ _ len) cs)
+--     | len > 0   = Chunk c (lazyInvariant cs)
+--     | otherwise = error $ "Data.Text.Lazy: invariant violation: "
+--                   ++ showStructure x
 
 -- | Display the internal structure of a lazy 'Text'.
 showStructure :: Text -> String
@@ -80,8 +86,10 @@ showStructure (Chunk t ts)    =
 -- | Smart constructor for 'Chunk'. Guarantees the data type invariant.
 chunk :: T.Text -> Text -> Text
 {-# INLINE chunk #-}
-chunk t@(T.Text _ _ len) ts | len == 0 = ts
-                            | otherwise = Chunk t ts
+chunk t ts | TT.length t == 0 = ts
+           | otherwise = Chunk t ts
+-- chunk t@(T.Text _ _ len) ts | len == 0 = ts
+--                             | otherwise = Chunk t ts
 
 -- | Smart constructor for 'Empty'.
 empty :: Text
