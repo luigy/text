@@ -1,4 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+#ifdef __GHCJS__
+{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnliftedFFITypes #-}
+#endif
 -- |
 -- Module      : Data.Text.Lazy.Fusion
 -- Copyright   : (c) 2009, 2010 Bryan O'Sullivan
@@ -29,65 +35,110 @@ import Prelude hiding (length)
 import qualified Data.Text.Internal.Fusion.Common as S
 import Control.Monad.ST (runST)
 import Data.Text.Internal.Fusion.Types
+#ifndef __GHCJS__
 import Data.Text.Internal.Fusion.Size (isEmpty, unknownSize)
+#else
+import Data.JSString (JSString)
+import qualified Data.JSString as JSS
+import GHC.Base (Int(..))
+import GHC.Exts (ByteArray#, Int#)
+#endif
 import Data.Text.Internal.Lazy
 import qualified Data.Text.Internal as I
 import qualified Data.Text.Array as A
 import Data.Text.Internal.Unsafe.Char (unsafeWrite)
 import Data.Text.Internal.Unsafe.Shift (shiftL)
--- import Data.Text.Unsafe (Iter(..), iter)
+import Data.Text.Unsafe (Iter(..), iter)
 import Data.Int (Int64)
 
 default(Int64)
 
--- TODO
 -- | /O(n)/ Convert a 'Text' into a 'Stream Char'.
 stream :: Text -> Stream Char
-stream = undefined
--- stream text = Stream next (text :*: 0) unknownSize
---   where
---     next (Empty :*: _) = Done
---     next (txt@(Chunk t@(I.Text _ _ len) ts) :*: i)
---         | i >= len  = next (ts :*: 0)
---         | otherwise = Yield c (txt :*: i+d)
-        -- where Iter c d = iter t i
+#ifndef __GHCJS__
+stream text = Stream next (text :*: 0) unknownSize
+  where
+    next (Empty :*: _) = Done
+    next (txt@(Chunk t@(I.Text _ _ len) ts) :*: i)
+        | i >= len  = next (ts :*: 0)
+        | otherwise = Yield c (txt :*: i+d)
+        where Iter c d = iter t i
+#else
+stream text = Stream next (text :*: 0) -- unknownSize
+  where
+    next (Empty :*: _) = Done
+    next (txt@(Chunk t@(I.Text jst) ts) :*: i)
+        | i >= JSS.length jst = next (ts :*: 0)
+        | otherwise = Yield c (txt :*: i+d)
+        where Iter c d = iter t i
+#endif
 {-# INLINE [0] stream #-}
 
 -- TODO
 -- | /O(n)/ Convert a 'Stream Char' into a 'Text', using the given
 -- chunk size.
 unstreamChunks :: Int -> Stream Char -> Text
-unstreamChunks = undefined
--- unstreamChunks !chunkSize (Stream next s0 len0)
---   | isEmpty len0 = Empty
---   | otherwise    = outer s0
---   where
---     outer so = {-# SCC "unstreamChunks/outer" #-}
---               case next so of
---                 Done       -> Empty
---                 Skip s'    -> outer s'
---                 Yield x s' -> runST $ do
---                                 a <- A.new unknownLength
---                                 unsafeWrite a 0 x >>= inner a unknownLength s'
---                     where unknownLength = 4
---       where
---         inner marr !len s !i
---             | i + 1 >= chunkSize = finish marr i s
---             | i + 1 >= len       = {-# SCC "unstreamChunks/resize" #-} do
---                 let newLen = min (len `shiftL` 1) chunkSize
---                 marr' <- A.new newLen
---                 A.copyM marr' 0 marr 0 len
---                 inner marr' newLen s i
---             | otherwise =
---                 {-# SCC "unstreamChunks/inner" #-}
---                 case next s of
---                   Done        -> finish marr i s
---                   Skip s'     -> inner marr len s' i
---                   Yield x s'  -> do d <- unsafeWrite marr i x
---                                     inner marr len s' (i+d)
---         finish marr len s' = do
---           arr <- A.unsafeFreeze marr
---           return (I.Text arr 0 len `Chunk` outer s')
+#ifndef __GHCJS__
+unstreamChunks !chunkSize (Stream next s0 len0)
+  | isEmpty len0 = Empty
+  | otherwise    = outer s0
+  where
+    outer so = {-# SCC "unstreamChunks/outer" #-}
+              case next so of
+                Done       -> Empty
+                Skip s'    -> outer s'
+                Yield x s' -> runST $ do
+                                a <- A.new unknownLength
+                                unsafeWrite a 0 x >>= inner a unknownLength s'
+                    where unknownLength = 4
+      where
+        inner marr !len s !i
+            | i + 1 >= chunkSize = finish marr i s
+            | i + 1 >= len       = {-# SCC "unstreamChunks/resize" #-} do
+                let newLen = min (len `shiftL` 1) chunkSize
+                marr' <- A.new newLen
+                A.copyM marr' 0 marr 0 len
+                inner marr' newLen s i
+            | otherwise =
+                {-# SCC "unstreamChunks/inner" #-}
+                case next s of
+                  Done        -> finish marr i s
+                  Skip s'     -> inner marr len s' i
+                  Yield x s'  -> do d <- unsafeWrite marr i x
+                                    inner marr len s' (i+d)
+        finish marr len s' = do
+          arr <- A.unsafeFreeze marr
+          return (I.Text arr 0 len `Chunk` outer s')
+#else
+unstreamChunks !chunkSize (Stream next s0) = outer s0
+  where
+    outer so = {-# SCC "unstreamChunks/outer" #-}
+              case next so of
+                Done       -> Empty
+                Skip s'    -> outer s'
+                Yield x s' -> runST $ do
+                                a <- A.new unknownLength
+                                unsafeWrite a 0 x >>= inner a unknownLength s'
+                    where unknownLength = 4
+      where
+        inner marr !len s !i
+            | i + 1 >= chunkSize = finish marr i s
+            | i + 1 >= len       = {-# SCC "unstreamChunks/resize" #-} do
+                let newLen = min (len `shiftL` 1) chunkSize
+                marr' <- A.new newLen
+                A.copyM marr' 0 marr 0 len
+                inner marr' newLen s i
+            | otherwise =
+                {-# SCC "unstreamChunks/inner" #-}
+                case next s of
+                  Done        -> finish marr i s
+                  Skip s'     -> inner marr len s' i
+                  Yield x s'  -> do d <- unsafeWrite marr i x
+                                    inner marr len s' (i+d)
+        finish marr (I# len#) s' = do
+          arr <- A.unsafeFreeze marr
+          return (I.Text (js_toString (A.aBA arr) 0# len#) `Chunk` outer s')
+#endif
 {-# INLINE [0] unstreamChunks #-}
 
 -- | /O(n)/ Convert a 'Stream Char' into a 'Text', using
@@ -122,3 +173,10 @@ index = S.indexI
 countChar :: Char -> Stream Char -> Int64
 countChar = S.countCharI
 {-# INLINE [0] countChar #-}
+
+#ifdef __GHCJS__
+foreign import javascript unsafe
+  "h$textToString"
+  js_toString :: ByteArray# -> Int# -> Int# -> JSString
+#endif
+
