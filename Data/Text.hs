@@ -224,7 +224,7 @@ import qualified Data.Text.Internal.Fusion.Common as S
 import Data.Text.Encoding (decodeUtf8', encodeUtf8)
 import Data.Text.Internal.Fusion (stream, reverseStream, unstream)
 -- import Data.Text.Internal.Private (span_)
-import Data.Text.Internal (Text(..), empty, firstf, mul, safe, text)
+import Data.Text.Internal (Text(..), empty, empty_, firstf, mul, safe, text)
 -- import Data.Text.Show (singleton, unpack, unpackCString#)
 import qualified Prelude as P
 import Data.Text.Unsafe (Iter(..), iter, iter_, lengthWord16, reverseIter,
@@ -253,19 +253,44 @@ import qualified Data.JSString.Internal.Fusion as SJS
 import qualified Data.JSString.Internal.Fusion.Common as SJS
 import Data.Coerce
 import GHC.Exts (Addr#)
+import qualified GHC.CString                          as GHC
 
 unpack :: Text -> String
 unpack = coerce JSS.unpack
+{-# INLINE [1] unpack #-}
 
 singleton :: Char -> Text
 singleton = coerce JSS.singleton
 {-# INLINE [1] singleton #-}
 
+{-# RULES
+"JSSTRING singleton -> fused" [~1] forall a.
+    singleton a = unstream (S.singleton (safe a))
+"JSSTRING singleton -> unfused" [1] forall a.
+    unstream (S.singleton (safe a)) = singleton a
+ #-}
 
 -- | /O(n)/ Convert a literal string into a JSString.  Subject to fusion.
 unpackCString# :: Addr# -> Text
 unpackCString# addr# = Text $ SJS.unstream (SJS.streamCString# addr#)
 {-# NOINLINE unpackCString# #-}
+
+{-# RULES "TEXT literal" forall a.
+    unstream (S.map safe (S.streamList (GHC.unpackCString# a)))
+      = unpackCString# a #-}
+
+{-# RULES "TEXT literal UTF8" [1] forall a.
+    unstream (S.map safe (S.streamList (GHC.unpackCStringUtf8# a)))
+      = unpackCString# a #-}
+
+{-# RULES "TEXT empty literal" [1]
+    unstream (S.map safe (S.streamList []))
+      = empty_ #-}
+
+{-# RULES "TEXT singleton literal" [1] forall a.
+    unstream (S.map safe (S.streamList [a]))
+      = singleton a #-}
+
 ---------------------------------------------------------------------
 
 -- $strict
@@ -494,12 +519,12 @@ append = coerce JSS.append
 --         return arr
 {-# NOINLINE append #-}
 
--- {-# RULES
--- "TEXT append -> fused" [~1] forall t1 t2.
---     append t1 t2 = unstream (S.append (stream t1) (stream t2))
--- "TEXT append -> unfused" [1] forall t1 t2.
---     unstream (S.append (stream t1) (stream t2)) = append t1 t2
---  #-}
+{-# RULES
+"TEXT append -> fused" [~1] forall t1 t2.
+    append t1 t2 = unstream (S.append (stream t1) (stream t2))
+"TEXT append -> unfused" [1] forall t1 t2.
+    unstream (S.append (stream t1) (stream t2)) = append t1 t2
+ #-}
 
 -- | /O(1)/ Returns the first character of a 'Text', which must be
 -- non-empty.  Subject to fusion.
@@ -534,12 +559,12 @@ last = coerce JSS.last
 --           n0 = A.unsafeIndex arr (off+len-2)
 {-# INLINE [1] last #-}
 
--- {-# RULES
--- "TEXT last -> fused" [~1] forall t.
---     last t = S.last (stream t)
--- "TEXT last -> unfused" [1] forall t.
---     S.last (stream t) = last t
---   #-}
+{-# RULES
+"TEXT last -> fused" [~1] forall t.
+    last t = S.last (stream t)
+"TEXT last -> unfused" [1] forall t.
+    S.last (stream t) = last t
+  #-}
 
 -- | /O(1)/ Returns all characters after the head of a 'Text', which
 -- must be non-empty.  Subject to fusion.
@@ -551,12 +576,12 @@ tail = coerce JSS.tail
 --     where d = iter_ t 0
 {-# INLINE [1] tail #-}
 
--- {-# RULES
--- "TEXT tail -> fused" [~1] forall t.
---     tail t = unstream (S.tail (stream t))
--- "TEXT tail -> unfused" [1] forall t.
---     unstream (S.tail (stream t)) = tail t
---  #-}
+{-# RULES
+"TEXT tail -> fused" [~1] forall t.
+    tail t = unstream (S.tail (stream t))
+"TEXT tail -> unfused" [1] forall t.
+    unstream (S.tail (stream t)) = tail t
+ #-}
 
 -- | /O(1)/ Returns all but the last character of a 'Text', which must
 -- be non-empty.  Subject to fusion.
@@ -569,12 +594,12 @@ init = coerce JSS.init
 --       n = A.unsafeIndex arr (off+len-1)
 {-# INLINE [1] init #-}
 
--- {-# RULES
--- "TEXT init -> fused" [~1] forall t.
---     init t = unstream (S.init (stream t))
--- "TEXT init -> unfused" [1] forall t.
---     unstream (S.init (stream t)) = init t
---  #-}
+{-# RULES
+"TEXT init -> fused" [~1] forall t.
+    init t = unstream (S.init (stream t))
+"TEXT init -> unfused" [1] forall t.
+    unstream (S.init (stream t)) = init t
+ #-}
 
 -- | /O(1)/ Tests whether a 'Text' is empty or not.  Subject to
 -- fusion.
@@ -587,12 +612,12 @@ null = coerce JSS.null
 --     len <= 0
 {-# INLINE [1] null #-}
 
--- {-# RULES
--- "TEXT null -> fused" [~1] forall t.
---     null t = S.null (stream t)
--- "TEXT null -> unfused" [1] forall t.
---     S.null (stream t) = null t
---  #-}
+{-# RULES
+"TEXT null -> fused" [~1] forall t.
+    null t = S.null (stream t)
+"TEXT null -> unfused" [1] forall t.
+    S.null (stream t) = null t
+ #-}
 
 -- | /O(1)/ Tests whether a 'Text' contains exactly one character.
 -- Subject to fusion.
@@ -616,44 +641,43 @@ length = coerce JSS.length
 -- of 'length', but can short circuit if the count of characters is
 -- greater than the number, and hence be more efficient.
 compareLength :: Text -> Int -> Ordering
-compareLength t n = compare (length t) n
--- compareLength t n = S.compareLengthI (stream t) n
--- {-# INLINE [1] compareLength #-}
--- 
--- {-# RULES
--- "TEXT compareN/length -> compareLength" [~1] forall t n.
---     compare (length t) n = compareLength t n
---   #-}
--- 
--- {-# RULES
--- "TEXT ==N/length -> compareLength/==EQ" [~1] forall t n.
---     eqInt (length t) n = compareLength t n == EQ
---   #-}
--- 
--- {-# RULES
--- "TEXT /=N/length -> compareLength//=EQ" [~1] forall t n.
---     neInt (length t) n = compareLength t n /= EQ
---   #-}
--- 
--- {-# RULES
--- "TEXT <N/length -> compareLength/==LT" [~1] forall t n.
---     ltInt (length t) n = compareLength t n == LT
---   #-}
--- 
--- {-# RULES
--- "TEXT <=N/length -> compareLength//=GT" [~1] forall t n.
---     leInt (length t) n = compareLength t n /= GT
---   #-}
--- 
--- {-# RULES
--- "TEXT >N/length -> compareLength/==GT" [~1] forall t n.
---     gtInt (length t) n = compareLength t n == GT
---   #-}
--- 
--- {-# RULES
--- "TEXT >=N/length -> compareLength//=LT" [~1] forall t n.
---     geInt (length t) n = compareLength t n /= LT
---   #-}
+compareLength t n = S.compareLengthI (stream t) n
+{-# INLINE [1] compareLength #-}
+
+{-# RULES
+"TEXT compareN/length -> compareLength" [~1] forall t n.
+    compare (length t) n = compareLength t n
+  #-}
+
+{-# RULES
+"TEXT ==N/length -> compareLength/==EQ" [~1] forall t n.
+    eqInt (length t) n = compareLength t n == EQ
+  #-}
+
+{-# RULES
+"TEXT /=N/length -> compareLength//=EQ" [~1] forall t n.
+    neInt (length t) n = compareLength t n /= EQ
+  #-}
+
+{-# RULES
+"TEXT <N/length -> compareLength/==LT" [~1] forall t n.
+    ltInt (length t) n = compareLength t n == LT
+  #-}
+
+{-# RULES
+"TEXT <=N/length -> compareLength//=GT" [~1] forall t n.
+    leInt (length t) n = compareLength t n /= GT
+  #-}
+
+{-# RULES
+"TEXT >N/length -> compareLength/==GT" [~1] forall t n.
+    gtInt (length t) n = compareLength t n == GT
+  #-}
+
+{-# RULES
+"TEXT >=N/length -> compareLength//=LT" [~1] forall t n.
+    geInt (length t) n = compareLength t n /= LT
+  #-}
 
 -- -----------------------------------------------------------------------------
 -- * Transformations
@@ -845,12 +869,12 @@ justifyLeft = coerce JSS.justifyLeft
 --   where len = length t
 {-# INLINE [1] justifyLeft #-}
 
--- {-# RULES
--- "TEXT justifyLeft -> fused" [~1] forall k c t.
---     justifyLeft k c t = unstream (S.justifyLeftI k c (stream t))
--- "TEXT justifyLeft -> unfused" [1] forall k c t.
---     unstream (S.justifyLeftI k c (stream t)) = justifyLeft k c t
---   #-}
+{-# RULES
+"TEXT justifyLeft -> fused" [~1] forall k c t.
+    justifyLeft k c t = unstream (S.justifyLeftI k c (stream t))
+"TEXT justifyLeft -> unfused" [1] forall k c t.
+    unstream (S.justifyLeftI k c (stream t)) = justifyLeft k c t
+  #-}
 
 -- | /O(n)/ Right-justify a string to the given length, using the
 -- specified fill character on the left.  Performs replacement on
@@ -1094,16 +1118,27 @@ replicate = coerce JSS.replicate
 --       loop 0 0
 {-# INLINE [1] replicate #-}
 
--- {-# RULES
--- "TEXT replicate/singleton -> replicateChar" [~1] forall n c.
---     replicate n (singleton c) = replicateChar n c
---   #-}
+{-# RULES
+"TEXT replicate/singleton -> replicateChar" [~1] forall n c.
+    replicate n (singleton c) = replicateChar n c
+  #-}
 
 -- | /O(n)/ 'replicateChar' @n@ @c@ is a 'Text' of length @n@ with @c@ the
 -- value of every element. Subject to fusion.
--- replicateChar :: Int -> Char -> Text
--- replicateChar n c = unstream (S.replicateCharI n (safe c))
--- {-# INLINE replicateChar #-}
+replicateChar :: Int -> Char -> Text
+#ifndef __GHCJS__
+replicateChar n c = unstream (S.replicateCharI n (safe c))
+{-# INLINE replicateChar #-}
+#else
+replicateChar n c = Text $ js_replicateChar n c
+{-# INLINE [1] replicateChar #-}
+{-# RULES
+"JSSTRING replicateChar -> fused" [~1] forall n c.
+    replicateChar n c = unstream (S.replicateCharI n (safe c))
+"JSSTRING replicateChar -> unfused" [1] forall n c.
+    unstream (S.replicateCharI n (safe c)) = replicateChar n c
+ #-}
+#endif
 
 -- | /O(n)/, where @n@ is the length of the result. The 'unfoldr'
 -- function is analogous to the List 'L.unfoldr'. 'unfoldr' builds a
@@ -1149,12 +1184,12 @@ take = coerce JSS.take
 --             | otherwise            = loop (i+d) (cnt+1)
 --           where d = iter_ t i
 
--- {-# RULES
--- "TEXT take -> fused" [~1] forall n t.
---     take n t = unstream (S.take n (stream t))
--- "TEXT take -> unfused" [1] forall n t.
---     unstream (S.take n (stream t)) = take n t
---   #-}
+{-# RULES
+"TEXT take -> fused" [~1] forall n t.
+    take n t = unstream (S.take n (stream t))
+"TEXT take -> unfused" [1] forall n t.
+    unstream (S.take n (stream t)) = take n t
+  #-}
 
 -- | /O(n)/ 'takeEnd' @n@ @t@ returns the suffix remaining after
 -- taking @n@ characters from the end of @t@.
@@ -1190,12 +1225,12 @@ drop = coerce JSS.drop
 --   where i = iterN n t
 {-# INLINE [1] drop #-}
 
--- {-# RULES
--- "TEXT drop -> fused" [~1] forall n t.
---     drop n t = unstream (S.drop n (stream t))
--- "TEXT drop -> unfused" [1] forall n t.
---     unstream (S.drop n (stream t)) = drop n t
---   #-}
+{-# RULES
+"TEXT drop -> fused" [~1] forall n t.
+    drop n t = unstream (S.drop n (stream t))
+"TEXT drop -> unfused" [1] forall n t.
+    unstream (S.drop n (stream t)) = drop n t
+  #-}
 
 -- | /O(n)/ 'dropEnd' @n@ @t@ returns the prefix remaining after
 -- dropping @n@ characters from the end of @t@.
@@ -1222,12 +1257,12 @@ takeWhile = coerce JSS.takeWhile
 --            where Iter c d    = iter t i
 {-# INLINE [1] takeWhile #-}
 
--- {-# RULES
--- "TEXT takeWhile -> fused" [~1] forall p t.
---     takeWhile p t = unstream (S.takeWhile p (stream t))
--- "TEXT takeWhile -> unfused" [1] forall p t.
---     unstream (S.takeWhile p (stream t)) = takeWhile p t
---   #-}
+{-# RULES
+"TEXT takeWhile -> fused" [~1] forall p t.
+    takeWhile p t = unstream (S.takeWhile p (stream t))
+"TEXT takeWhile -> unfused" [1] forall p t.
+    unstream (S.takeWhile p (stream t)) = takeWhile p t
+  #-}
 
 -- | /O(n)/ 'takeWhileEnd', applied to a predicate @p@ and a 'Text',
 -- returns the longest suffix (possibly empty) of elements that
@@ -1236,7 +1271,7 @@ takeWhile = coerce JSS.takeWhile
 --
 -- > takeWhileEnd (=='o') "foo" == "oo"
 takeWhileEnd :: (Char -> Bool) -> Text -> Text
-takeWhileEnd = P.undefined -- TODO
+takeWhileEnd = P.error "takeWhileEnd: not implemented."
 -- takeWhileEnd :: (Char -> Bool) -> Text -> Text
 -- takeWhileEnd p t@(Text arr off len) = loop (len-1) len
 --   where loop !i !l | l <= 0    = t
@@ -1245,12 +1280,12 @@ takeWhileEnd = P.undefined -- TODO
 --             where (c,d)        = reverseIter t i
 {-# INLINE [1] takeWhileEnd #-}
 
--- {-# RULES
--- "TEXT takeWhileEnd -> fused" [~1] forall p t.
---     takeWhileEnd p t = S.reverse (S.takeWhile p (S.reverseStream t))
--- "TEXT takeWhileEnd -> unfused" [1] forall p t.
---     S.reverse (S.takeWhile p (S.reverseStream t)) = takeWhileEnd p t
---   #-}
+{-# RULES
+"TEXT takeWhileEnd -> fused" [~1] forall p t.
+    takeWhileEnd p t = S.reverse (S.takeWhile p (S.reverseStream t))
+"TEXT takeWhileEnd -> unfused" [1] forall p t.
+    S.reverse (S.takeWhile p (S.reverseStream t)) = takeWhileEnd p t
+  #-}
 
 -- | /O(n)/ 'dropWhile' @p@ @t@ returns the suffix remaining after
 -- 'takeWhile' @p@ @t@. Subject to fusion.
@@ -1263,12 +1298,12 @@ dropWhile = coerce JSS.dropWhile
 
 {-# INLINE [1] dropWhile #-}
 
--- {-# RULES
--- "TEXT dropWhile -> fused" [~1] forall p t.
---     dropWhile p t = unstream (S.dropWhile p (stream t))
--- "TEXT dropWhile -> unfused" [1] forall p t.
---     unstream (S.dropWhile p (stream t)) = dropWhile p t
---   #-}
+{-# RULES
+"TEXT dropWhile -> fused" [~1] forall p t.
+    dropWhile p t = unstream (S.dropWhile p (stream t))
+"TEXT dropWhile -> unfused" [1] forall p t.
+    unstream (S.dropWhile p (stream t)) = dropWhile p t
+  #-}
 
 -- | /O(n)/ 'dropWhileEnd' @p@ @t@ returns the prefix remaining after
 -- dropping characters that satisfy the predicate @p@ from the end of
@@ -1286,12 +1321,12 @@ dropWhileEnd = coerce JSS.dropWhileEnd
 --             where (c,d)        = reverseIter t i
 {-# INLINE [1] dropWhileEnd #-}
 
--- {-# RULES
--- "TEXT dropWhileEnd -> fused" [~1] forall p t.
---     dropWhileEnd p t = S.reverse (S.dropWhile p (S.reverseStream t))
--- "TEXT dropWhileEnd -> unfused" [1] forall p t.
---     S.reverse (S.dropWhile p (S.reverseStream t)) = dropWhileEnd p t
---   #-}
+{-# RULES
+"TEXT dropWhileEnd -> fused" [~1] forall p t.
+    dropWhileEnd p t = S.reverse (S.dropWhile p (S.reverseStream t))
+"TEXT dropWhileEnd -> unfused" [1] forall p t.
+    S.reverse (S.dropWhile p (S.reverseStream t)) = dropWhileEnd p t
+  #-}
 
 -- | /O(n)/ 'dropAround' @p@ @t@ returns the substring remaining after
 -- dropping characters that satisfy the predicate @p@ from both the
@@ -1430,10 +1465,10 @@ splitOn = coerce JSS.splitOn
 --     go  s _      = [text arr (s+off) (len-s)]
 {-# INLINE [1] splitOn #-}
 
--- {-# RULES
--- "TEXT splitOn/singleton -> split/==" [~1] forall c t.
---     splitOn (singleton c) t = split (==c) t
---   #-}
+{-# RULES
+"TEXT splitOn/singleton -> split/==" [~1] forall c t.
+    splitOn (singleton c) t = split (==c) t
+  #-}
 
 -- | /O(n)/ Splits a 'Text' into components delimited by separators,
 -- where the predicate returns True for a separator element.  The
@@ -1619,16 +1654,16 @@ count = coerce JSS.count
 --     | otherwise       = L.length (indices pat src)
 {-# INLINE [1] count #-}
 
--- {-# RULES
--- "TEXT count/singleton -> countChar" [~1] forall c t.
---     count (singleton c) t = countChar c t
---   #-}
+{-# RULES
+"TEXT count/singleton -> countChar" [~1] forall c t.
+    count (singleton c) t = countChar c t
+  #-}
 
 -- | /O(n)/ The 'countChar' function returns the number of times the
 -- query element appears in the given 'Text'. Subject to fusion.
--- countChar :: Char -> Text -> Int
--- countChar c t = S.countChar c (stream t)
--- {-# INLINE countChar #-}
+countChar :: Char -> Text -> Int
+countChar c t = S.countChar c (stream t)
+{-# INLINE countChar #-}
 
 -------------------------------------------------------------------------------
 -- * Zipping
@@ -1723,10 +1758,12 @@ isPrefixOf = coerce JSS.isPrefixOf
 --     alen <= blen && S.isPrefixOf (stream a) (stream b)
 {-# INLINE [1] isPrefixOf #-}
 
--- {-# RULES
--- "TEXT isPrefixOf -> fused" [~1] forall s t.
---     isPrefixOf s t = S.isPrefixOf (stream s) (stream t)
---   #-}
+{-# RULES
+"TEXT isPrefixOf -> fused" [~1] forall s t.
+    isPrefixOf s t = S.isPrefixOf (stream s) (stream t)
+"JSSTRING isPrefixOf -> unfused" [1] forall x y.
+    S.isPrefixOf (stream x) (stream y) = isPrefixOf x y
+  #-}
 
 -- | /O(n)/ The 'isSuffixOf' function takes two 'Text's and returns
 -- 'True' iff the first is a suffix of the second.
@@ -1753,10 +1790,10 @@ isInfixOf = coerce JSS.isInfixOf
 --     | otherwise          = not . L.null . indices needle $ haystack
 {-# INLINE [1] isInfixOf #-}
 
--- {-# RULES
--- "TEXT isInfixOf/singleton -> S.elem/S.stream" [~1] forall n h.
---     isInfixOf (singleton n) h = S.elem n (S.stream h)
---   #-}
+{-# RULES
+"TEXT isInfixOf/singleton -> S.elem/S.stream" [~1] forall n h.
+    isInfixOf (singleton n) h = S.elem n (S.stream h)
+  #-}
 
 -------------------------------------------------------------------------------
 -- * View patterns
@@ -1864,3 +1901,5 @@ copy = P.id -- TODO
 --     go = do
 --       marr <- A.new len
 
+foreign import javascript unsafe
+  "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString

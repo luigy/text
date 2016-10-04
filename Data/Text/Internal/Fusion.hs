@@ -72,35 +72,47 @@ default(Int)
 
 stream :: Text -> Stream Char
 stream = coerce JSS.stream
+{-# INLINE [0] stream #-}
 
 reverseStream :: Text -> Stream Char
 reverseStream = coerce JSS.reverseStream
+{-# INLINE [0] reverseStream #-}
 
 unstream :: Stream Char -> Text
 unstream = coerce JSS.unstream
+{-# INLINE [0] unstream #-}
+{-# RULES "STREAM stream/unstream fusion" forall s. stream (unstream s) = s #-}
 
 length :: Stream Char -> Int
 length = JSS.length
+{-# INLINE [0] length #-}
 
 reverse :: Stream Char -> Text
 reverse = coerce JSS.reverse
+{-# INLINE [0] reverse #-}
 
 reverseScanr :: (Char -> Char -> Char) -> Char -> Stream Char -> Stream Char
 reverseScanr = JSS.reverseScanr
+{-# INLINE reverseScanr #-}
 
 mapAccumL :: (a -> Char -> (a, Char)) -> a -> Stream Char -> (a, Text)
 mapAccumL f z0 st =
   let (a, t) = JSS.mapAccumL f z0 st
   in (a, Text t)
+{-# INLINE [0] mapAccumL #-}
 
 unfoldrN :: Int -> (a -> Maybe (Char,a)) -> a -> Stream Char
 unfoldrN = JSS.unfoldrN
+{-# INLINE [0] unfoldrN #-}
 
 index :: Stream Char -> Int -> Char
 index = JSS.index
+{-# INLINE [0] index #-}
 
 findIndex :: (Char -> Bool) -> Stream Char -> Maybe Int
 findIndex = JSS.findIndex
+{-# INLINE [0] findIndex #-}
 
 countChar :: Char -> Stream Char -> Int
 countChar = JSS.countChar
+{-# INLINE [0] countChar #-}
