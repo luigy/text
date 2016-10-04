@@ -26,10 +26,11 @@ import Data.Bits
 import Data.Int (Int32, Int64)
 -- import Data.Text.Internal.Unsafe.Char (ord)
 import Data.Typeable (Typeable)
-import GHC.Exts                       (ByteArray#, Char(..), ord#, andI#, (/=#), isTrue#)
+import GHC.Exts                       (ByteArray#, Char(..), ord#, andI#, (/=#), isTrue#, (==#), Int(..), Int#, isTrue#)
 -- import qualified Data.Text.Array as A
 import GHCJS.Marshal.Pure
 import GHCJS.Marshal
+import qualified GHC.CString                          as GHC
 
 
 newtype Text = Text JSString
@@ -49,13 +50,17 @@ foreign import javascript unsafe
   "String.fromCharCode.apply(null, $1['u8'])"
   js_decodeBytes :: ByteArray# -> JSString
 
+foreign import javascript unsafe
+  "h$textToString"
+  js_textToString :: ByteArray# -> Int# -> Int# -> JSString
+
 -- | Construct a 'Text' without invisibly pinning its byte array in
 -- memory if its length has dwindled to zero.
 text :: A.Array -> Int -> Int -> Text
 -- text arr off len | len == 0  = empty
 --                  | otherwise = text_ arr off len
-text (A.Array ba) off len | len == 0  = empty
-                          | otherwise = Text (js_decodeBytes ba)
+text (A.Array ba) (I# off#) (I# len#) | isTrue# (len# ==# 0#) = empty
+                                      | otherwise = Text $ js_textToString ba off# len#
 
 -- | Checked multiplication.  Calls 'error' if the result would
 -- overflow.
