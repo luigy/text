@@ -145,21 +145,9 @@ decodeLatin1 (PS fp off len) = text a 0 len
     c_decode_latin1 (A.maBA dest) (ptr `plusPtr` off) (ptr `plusPtr` (off+len))
     return dest
 
--- foreign import javascript unsafe "h$textToString" js_toString :: JSVal -> Text
-
 foreign import javascript unsafe "h$textFromString" js_fromString :: JSString -> (# ByteArray#, Int# #)
-foreign import javascript unsafe "String['fromCharCode']['apply'](null, $1['u8'])" js_decodeBytes :: JSVal -> JSString
-foreign import javascript unsafe "h$decodeUtf8z($1, $2)" js_fromByteStringBuffer :: Buffer -> Int -> JSString
-foreign import javascript unsafe "h$decodeUtf8z($1, $2)" js_fromByteStringBufferz :: Addr# -> Int -> JSString
 foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8 :: JSString -> Buffer
-
-foreign import javascript unsafe "String['fromCharCode']['apply'](null, $1['u8'])" js_decodeUtf8Hack :: Addr# -> JSString
-
-foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8Mut :: JSString -> MutableBuffer
-foreign import javascript unsafe "h$encodeUtf16($1)" js_encodeUtf16 :: JSString -> Buffer
 foreign import javascript unsafe "$1['length']" js_length :: JSString -> Int
-foreign import javascript unsafe "h$jsstringTake" js_take :: Int -> JSString -> JSString
-foreign import javascript unsafe "$3.substring($1,$2)" js_substring :: Int# -> Int# -> JSString -> JSString
 
 -- | Decode a 'ByteString' containing UTF-8 encoded text.
 decodeUtf8With :: OnDecodeError -> ByteString -> Text
