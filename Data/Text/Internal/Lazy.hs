@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, DeriveDataTypeable #-}
+{-# LANGUAGE BangPatterns, DeriveDataTypeable, CPP #-}
 {-# OPTIONS_HADDOCK not-home #-}
 
 -- |
@@ -44,9 +44,9 @@ import Data.Typeable (Typeable)
 import Foreign.Storable (sizeOf)
 import qualified Data.Text.Internal as T
 
--- GHCJS
+#ifdef __GHCJS__
 import qualified Data.Text as TT
---
+#endif
 
 data Text = Empty
           | Chunk {-# UNPACK #-} !T.Text Text
@@ -61,20 +61,28 @@ data Text = Empty
 -- | Check the invariant strictly.
 strictInvariant :: Text -> Bool
 strictInvariant Empty = True
--- TODO only used for QuickCheck ?
--- strictInvariant x@(Chunk (T.Text _ _ len) cs)
---     | len > 0   = strictInvariant cs
---     | otherwise = error $ "Data.Text.Lazy: invariant violation: "
---                   ++ showStructure x
+#ifndef __GHCJS__
+strictInvariant x@(Chunk (T.Text _ _ len) cs)
+    | len > 0   = strictInvariant cs
+#else
+strictInvariant x@(Chunk t cs)
+    | TT.length t > 0   = strictInvariant cs
+#endif
+    | otherwise = error $ "Data.Text.Lazy: invariant violation: "
+                  ++ showStructure x
 
 -- | Check the invariant lazily.
 lazyInvariant :: Text -> Text
 lazyInvariant Empty = Empty
--- TODO only used for quickcheck
--- lazyInvariant x@(Chunk c@(T.Text _ _ len) cs)
---     | len > 0   = Chunk c (lazyInvariant cs)
---     | otherwise = error $ "Data.Text.Lazy: invariant violation: "
---                   ++ showStructure x
+#ifndef __GHCJS__
+lazyInvariant x@(Chunk c@(T.Text _ _ len) cs)
+    | len > 0   = Chunk c (lazyInvariant cs)
+#else
+lazyInvariant x@(Chunk c cs)
+    | TT.length c > 0 = Chunk c (lazyInvariant cs)
+#endif
+    | otherwise = error $ "Data.Text.Lazy: invariant violation: "
+                  ++ showStructure x
 
 -- | Display the internal structure of a lazy 'Text'.
 showStructure :: Text -> String
@@ -86,10 +94,13 @@ showStructure (Chunk t ts)    =
 -- | Smart constructor for 'Chunk'. Guarantees the data type invariant.
 chunk :: T.Text -> Text -> Text
 {-# INLINE chunk #-}
-chunk t ts | TT.length t == 0 = ts
+#ifndef __GHCJS__
+chunk t@(T.Text _ _ len) ts | len == 0 = ts
+                            | otherwise = Chunk t ts
+#else
+chunk t ts | TT.null t = ts
            | otherwise = Chunk t ts
--- chunk t@(T.Text _ _ len) ts | len == 0 = ts
---                             | otherwise = Chunk t ts
+#endif
 
 -- | Smart constructor for 'Empty'.
 empty :: Text
