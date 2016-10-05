@@ -286,9 +286,8 @@ streamDecodeUtf8With onErr = decodeChunk B.empty 0 0
         let end = ptr `plusPtr` (off + len)
             loop curPtr = do
               poke curPtrPtr curPtr
-              curPtr' <- error "c_decode_utf8_with_state: needs to be implemented"
-              -- curPtr' <- c_decode_utf8_with_state (A.maBA dest) destOffPtr
-              --            curPtrPtr end codepointPtr statePtr
+              curPtr' <- c_decode_utf8_with_state (A.maBA dest) destOffPtr
+                         curPtrPtr end codepointPtr statePtr
               state <- peek statePtr
               case state of
                 UTF8_REJECT -> do
