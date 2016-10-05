@@ -77,7 +77,9 @@ import Data.Text.Internal (Text(..), safe, text)
 import Data.Text.Internal.Private (runText)
 import Data.Text.Internal.Unsafe.Char (ord, unsafeWrite)
 import Data.Text.Internal.Unsafe.Shift (shiftR)
--- import Data.Text.Show ()
+#ifndef __GHCJS__
+import Data.Text.Show ()
+#endif
 import Data.Text.Unsafe (unsafeDupablePerformIO)
 import Data.Word (Word8, Word32)
 import Foreign.C.Types (CSize(..))
@@ -95,24 +97,13 @@ import qualified Data.Text.Internal.Encoding.Fusion as E
 import qualified Data.Text.Internal.Encoding.Utf16 as U16
 import qualified Data.Text.Internal.Fusion as F
 
-import GHC.Exts (ByteArray#, Int(..), Int#, Any, Addr#, Ptr(..))
-{-
 #include "text_cbits.h"
--}
-
-import Data.Text.Encoding.Error (OnDecodeError, UnicodeException, strictDecode)
+#ifdef __GHCJS__
+import GHC.Exts (Int(..), Int#)
 import Data.ByteString (ByteString)
-import Data.Text.Internal (Text)
-
--------------------------------------
-import GHC.ForeignPtr
-import GHCJS.Types
 import GHCJS.Buffer
 import Data.JSString (JSString)
-import Unsafe.Coerce
-import System.IO.Unsafe
--------------------------------------
-
+#endif
 
 -- $strict
 --
@@ -144,10 +135,6 @@ decodeLatin1 (PS fp off len) = text a 0 len
   go dest = withForeignPtr fp $ \ptr -> do
     c_decode_latin1 (A.maBA dest) (ptr `plusPtr` off) (ptr `plusPtr` (off+len))
     return dest
-
-foreign import javascript unsafe "h$textFromString" js_fromString :: JSString -> (# ByteArray#, Int# #)
-foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8 :: JSString -> Buffer
-foreign import javascript unsafe "$1['length']" js_length :: JSString -> Int
 
 -- | Decode a 'ByteString' containing UTF-8 encoded text.
 decodeUtf8With :: OnDecodeError -> ByteString -> Text
@@ -348,13 +335,18 @@ encodeUtf8BuilderEscaped be =
   where
     bound = max 4 $ BP.sizeBound be
 
+#ifndef __GHCJS__
+    mkBuildstep (Text arr off len) !k =
+#else
     mkBuildstep (Text t) !k =
-    -- mkBuildstep (Text arr off len) !k =
+#endif
         outerLoop off
       where
+#ifdef __GHCJS__
         off = 0
         (arr, len) = let (# ba, len' #) = js_fromString t
                      in (A.Array ba, I# len')
+#endif
         iend = off + len
 
         outerLoop !i0 !br@(B.BufferRange op0 ope)
@@ -394,27 +386,28 @@ encodeUtf8BuilderEscaped be =
                   where
                     poke8 j v = poke (op `plusPtr` j) (fromIntegral v :: Word8)
 
-
-
 -- | Encode text using UTF-8 encoding.
 encodeUtf8 :: Text -> ByteString
+#ifndef __GHCJS__
+encodeUtf8 (Text arr off len)
+  | len == 0  = B.empty
+  | otherwise = unsafeDupablePerformIO $ do
+  fp <- mallocByteString (len*4)
+  withForeignPtr fp $ \ptr ->
+    with ptr $ \destPtr -> do
+      c_encode_utf8 destPtr (A.aBA arr) (fromIntegral off) (fromIntegral len)
+      newDest <- peek destPtr
+      let utf8len = newDest `minusPtr` ptr
+      if utf8len >= len `shiftR` 1
+        then return (PS fp 0 utf8len)
+        else do
+          fp' <- mallocByteString utf8len
+          withForeignPtr fp' $ \ptr' -> do
+            memcpy ptr' ptr (fromIntegral utf8len)
+            return (PS fp' 0 utf8len)
+#else
 encodeUtf8 (Text txt) = toByteString 0 (Just (js_length txt)) $ js_encodeUtf8 txt
--- encodeUtf8 (Text arr off len)
---   | len == 0  = B.empty
---   | otherwise = unsafeDupablePerformIO $ do
---   fp <- mallocByteString (len*4)
---   withForeignPtr fp $ \ptr ->
---     with ptr $ \destPtr -> do
---       c_encode_utf8 destPtr (A.aBA arr) (fromIntegral off) (fromIntegral len)
---       newDest <- peek destPtr
---       let utf8len = newDest `minusPtr` ptr
---       if utf8len >= len `shiftR` 1
---         then return (PS fp 0 utf8len)
---         else do
---           fp' <- mallocByteString utf8len
---           withForeignPtr fp' $ \ptr' -> do
---             memcpy ptr' ptr (fromIntegral utf8len)
---             return (PS fp' 0 utf8len)
+#endif
 
 -- | Decode text from little endian UTF-16 encoding.
 decodeUtf16LEWith :: OnDecodeError -> ByteString -> Text
@@ -504,5 +497,11 @@ foreign import ccall unsafe "_hs_text_decode_utf8_state" c_decode_utf8_with_stat
 foreign import ccall unsafe "_hs_text_decode_latin1" c_decode_latin1
     :: MutableByteArray# s -> Ptr Word8 -> Ptr Word8 -> IO ()
 
+#ifndef __GHCJS__
 foreign import ccall unsafe "_hs_text_encode_utf8" c_encode_utf8
     :: Ptr (Ptr Word8) -> ByteArray# -> CSize -> CSize -> IO ()
+#else
+foreign import javascript unsafe "h$textFromString" js_fromString :: JSString -> (# ByteArray#, Int# #)
+foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8 :: JSString -> Buffer
+foreign import javascript unsafe "$1['length']" js_length :: JSString -> Int
+#endif
