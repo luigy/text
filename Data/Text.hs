@@ -1271,13 +1271,20 @@ takeWhile = coerce JSS.takeWhile
 --
 -- > takeWhileEnd (=='o') "foo" == "oo"
 takeWhileEnd :: (Char -> Bool) -> Text -> Text
-takeWhileEnd = P.error "takeWhileEnd: not implemented."
--- takeWhileEnd :: (Char -> Bool) -> Text -> Text
--- takeWhileEnd p t@(Text arr off len) = loop (len-1) len
---   where loop !i !l | l <= 0    = t
---                    | p c       = loop (i+d) (l+d)
---                    | otherwise = text arr (off+l) (len-l)
---             where (c,d)        = reverseIter t i
+#ifndef __GHCJS__
+takeWhileEnd p t@(Text arr off len) = loop (len-1) len
+  where loop !i !l | l <= 0    = t
+                   | p c       = loop (i+d) (l+d)
+                   | otherwise = text arr (off+l) (len-l)
+            where (c,d)        = reverseIter t i
+#else
+takeWhileEnd p t@(Text jst) = loop (len-1) len
+  where loop !i !l | l <= 0    = t
+                   | p c       = loop (i+d) (l+d)
+                   | otherwise = Text $ js_substr1 l jst
+            where (c,d)        = reverseIter t i
+        len = length t
+#endif
 {-# INLINE [1] takeWhileEnd #-}
 
 {-# RULES
@@ -1903,3 +1910,5 @@ copy = P.id -- TODO
 
 foreign import javascript unsafe
   "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString
+foreign import javascript unsafe
+  "$2.substr($1)" js_substr1 :: Int -> JSString -> JSString
