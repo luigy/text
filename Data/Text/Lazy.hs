@@ -1574,11 +1574,10 @@ isSuffixOf x y = reverse x `isPrefixOf` reverse y
 -- In (unlikely) bad cases, this function's time complexity degrades
 -- towards /O(n*m)/.
 isInfixOf :: Text -> Text -> Bool
-isInfixOf _ _ = True
--- isInfixOf needle haystack
---     | null needle        = True
---     | isSingleton needle = S.elem (head needle) . S.stream $ haystack
---     | otherwise          = not . L.null . indices needle $ haystack
+isInfixOf needle haystack
+    | null needle        = True
+    | isSingleton needle = S.elem (head needle) . S.stream $ haystack
+    | otherwise          = not . L.null . indices needle $ haystack
 {-# INLINE [1] isInfixOf #-}
 
 {-# RULES
