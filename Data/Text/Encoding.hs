@@ -406,7 +406,8 @@ encodeUtf8 (Text arr off len)
             memcpy ptr' ptr (fromIntegral utf8len)
             return (PS fp' 0 utf8len)
 #else
-encodeUtf8 (Text txt) = toByteString 0 (Just (js_length txt)) $ js_encodeUtf8 txt
+encodeUtf8 (Text txt) = toByteString 0 (Just (byteLength buf - 1)) buf
+  where buf = js_encodeUtf8 txt
 #endif
 
 -- | Decode text from little endian UTF-16 encoding.
@@ -503,5 +504,4 @@ foreign import ccall unsafe "_hs_text_encode_utf8" c_encode_utf8
 #else
 foreign import javascript unsafe "h$textFromString" js_fromString :: JSString -> (# ByteArray#, Int# #)
 foreign import javascript unsafe "h$encodeUtf8($1)" js_encodeUtf8 :: JSString -> Buffer
-foreign import javascript unsafe "$1['length']" js_length :: JSString -> Int
 #endif
