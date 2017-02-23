@@ -6,7 +6,7 @@
 
  -}
 
--- | Moved from ghcjs-base with text-jsstring support.
+-- Moved from ghcjs-base with text-jsstring support.
 
 module Data.JSString.Text
     ( textToJSString
