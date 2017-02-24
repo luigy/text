@@ -34,9 +34,10 @@ import qualified GHC.CString                          as GHC
 
 
 newtype Text = Text JSString
-  deriving ( Show, Eq, Ord, IsString, Monoid, Read, Data
-           , PToJSVal, PFromJSVal, FromJSVal, ToJSVal
-           )
+  deriving (PToJSVal, PFromJSVal, FromJSVal, ToJSVal)
+
+instance Show Text where
+  showsPrec p (Text jsstring) r = showsPrec p jsstring r
 
 empty :: Text
 empty = Text JSS.empty

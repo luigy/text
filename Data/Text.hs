@@ -373,12 +373,17 @@ unpackCString# addr# = Text $ SJS.unstream (SJS.streamCString# addr#)
 --         | lenA == lenB = A.equal arrA offA arrB offB lenA
 --         | otherwise    = False
 --     {-# INLINE (==) #-}
+instance Eq Text where
+    Text x == Text y = x == y
 
 -- instance Ord Text where
 --     compare = compareText
 
--- instance Read Text where
---     readsPrec p str = [(pack x,y) | (x,y) <- readsPrec p str]
+instance Ord Text where
+    compare (Text x) (Text y) = compare x y
+
+instance Read Text where
+    readsPrec p str = [(pack x,y) | (x,y) <- readsPrec p str]
 
 #if MIN_VERSION_base(4,9,0)
 -- Semigroup orphan instances for older GHCs are provided by
@@ -388,17 +393,17 @@ instance Semigroup Text where
     (<>) = append
 #endif
 
--- instance Monoid Text where
---     mempty  = empty
--- #if MIN_VERSION_base(4,9,0)
---     mappend = (<>) -- future-proof definition
--- #else
---     mappend = append
--- #endif
---     mconcat = concat
+instance Monoid Text where
+    mempty  = empty
+#if MIN_VERSION_base(4,9,0)
+    mappend = (<>) -- future-proof definition
+#else
+    mappend = append
+#endif
+    mconcat = concat
 
--- instance IsString Text where
---     fromString = pack
+instance IsString Text where
+    fromString = pack
 
 #if __GLASGOW_HASKELL__ >= 708
 instance Exts.IsList Text where
@@ -434,13 +439,13 @@ instance Binary Text where
 -- and 'Data.Map.Map' is archived here:
 -- <http://markmail.org/message/trovdc6zkphyi3cr#query:+page:1+mid:a46der3iacwjcf6n+state:results Proposal: Allow gunfold for Data.Map, ... >
 
--- instance Data Text where
---   gfoldl f z txt = z pack `f` (unpack txt)
---   toConstr _ = packConstr
---   gunfold k z c = case constrIndex c of
---     1 -> k (z pack)
---     _ -> P.error "gunfold"
---   dataTypeOf _ = textDataType
+instance Data Text where
+  gfoldl f z txt = z pack `f` (unpack txt)
+  toConstr _ = packConstr
+  gunfold k z c = case constrIndex c of
+    1 -> k (z pack)
+    _ -> P.error "gunfold"
+  dataTypeOf _ = textDataType
 
 #if MIN_VERSION_base(4,7,0)
 -- | Only defined for @base-4.7.0.0@ and later
