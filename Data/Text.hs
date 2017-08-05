@@ -6,7 +6,7 @@
 #if __GLASGOW_HASKELL__ >= 708
 {-# LANGUAGE TypeFamilies #-}
 #endif
-{-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI #-}
+{-# LANGUAGE ForeignFunctionInterface, JavaScriptFFI, UnliftedFFITypes #-}
 -- |
 -- Module      : Data.Text
 -- Copyright   : (c) 2009, 2010, 2011, 2012 Bryan O'Sullivan,
@@ -247,13 +247,15 @@ import Text.Printf (PrintfArg, formatArg, formatString)
 #endif
 
 -- GHCJS ------------------------------------------------------------
-import Data.JSString (JSString)
+import Data.JSString.Internal.Type (JSString (..))
 import qualified Data.JSString as JSS
 import qualified Data.JSString.Internal.Fusion as SJS
 import qualified Data.JSString.Internal.Fusion.Common as SJS
 import Data.Coerce
-import GHC.Exts (Addr#)
+import GHC.Base (build)
 import qualified GHC.CString                          as GHC
+import GHC.Exts (Addr#, ByteArray#)
+import GHCJS.Prim (JSVal (..))
 
 unpack :: Text -> String
 unpack = coerce JSS.unpack
@@ -269,6 +271,10 @@ singleton = coerce JSS.singleton
 "JSSTRING singleton -> unfused" [1] forall a.
     unstream (S.singleton (safe a)) = singleton a
  #-}
+
+foreign import javascript unsafe "$r = $1;" addrToByteArray :: Addr# -> ByteArray#
+
+{-# RULES "inlineJSString" forall s. pack (GHC.Base.build (GHC.unpackFoldrCString# s)) = Text (JSString (JSVal (addrToByteArray s))) #-}
 
 -- | /O(n)/ Convert a literal string into a JSString.  Subject to fusion.
 unpackCString# :: Addr# -> Text
