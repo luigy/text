@@ -232,7 +232,8 @@ import Data.Text.Internal (Text(..), empty, empty_, firstf, mul, safe, text)
 -- import Data.Text.Show (singleton, unpack, unpackCString#)
 import qualified Prelude as P
 import Data.Text.Unsafe (Iter(..), iter, iter_, lengthWord16, reverseIter,
-                         reverseIter_, unsafeHead, unsafeTail)
+                         reverseIter_, unsafeHead, unsafeTail,
+                         unsafeDupablePerformIO)
 import Data.Text.Internal.Unsafe.Char (unsafeChr)
 import qualified Data.Text.Internal.Functions as F
 import qualified Data.Text.Internal.Encoding.Utf16 as U16
@@ -259,7 +260,7 @@ import Data.Coerce
 import GHC.Base (build)
 import qualified GHC.CString                          as GHC
 import GHC.Exts (Addr#, ByteArray#)
-import GHCJS.Prim (JSVal (..))
+import GHCJS.Prim (JSVal (..), unpackJSString#)
 
 unpack :: Text -> String
 unpack = coerce JSS.unpack
@@ -276,9 +277,7 @@ singleton = coerce JSS.singleton
     unstream (S.singleton (safe a)) = singleton a
  #-}
 
-foreign import javascript unsafe "$r = $1;" addrToByteArray :: Addr# -> ByteArray#
-
-{-# RULES "inlineJSString" forall s. pack (GHC.Base.build (GHC.unpackFoldrCString# s)) = Text (JSString (JSVal (addrToByteArray s))) #-}
+{-# RULES "inlineJSString" forall s. pack (GHC.Base.build (GHC.unpackFoldrCString# s)) = Text (JSString (unsafeDupablePerformIO (unpackJSString# s))) #-}
 
 -- | /O(n)/ Convert a literal string into a JSString.  Subject to fusion.
 unpackCString# :: Addr# -> Text
