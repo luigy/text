@@ -12,14 +12,13 @@
 --
 -- License     : BSD-style
 -- Maintainer  : bos@serpentine.com
--- Stability   : experimental
 -- Portability : portable
 --
 -- Functions for converting 'Text' values to and from 'ByteString',
 -- using several standard encodings.
 --
 -- To gain access to a much larger family of encodings, use the
--- @text-icu@ package: <http://hackage.haskell.org/package/text-icu>
+-- <http://hackage.haskell.org/package/text-icu text-icu package>.
 
 module Data.Text.Encoding
     (
@@ -67,7 +66,7 @@ import Control.Monad.ST.Unsafe (unsafeIOToST, unsafeSTToIO)
 import Control.Monad.ST (unsafeIOToST, unsafeSTToIO)
 #endif
 
-import Control.Exception (evaluate, try)
+import Control.Exception (evaluate, try, throwIO, ErrorCall(ErrorCall))
 import Control.Monad.ST (runST)
 import Data.Bits ((.&.))
 import Data.ByteString as B
@@ -82,7 +81,11 @@ import Data.Text.Show ()
 #endif
 import Data.Text.Unsafe (unsafeDupablePerformIO)
 import Data.Word (Word8, Word32)
-import Foreign.C.Types (CSize(..))
+#if __GLASGOW_HASKELL__ >= 703
+import Foreign.C.Types (CSize(CSize))
+#else
+import Foreign.C.Types (CSize)
+#endif
 import Foreign.ForeignPtr (withForeignPtr)
 import Foreign.Marshal.Utils (with)
 import Foreign.Ptr (Ptr, minusPtr, nullPtr, plusPtr)
@@ -137,6 +140,13 @@ decodeLatin1 (PS fp off len) = text a 0 len
     return dest
 
 -- | Decode a 'ByteString' containing UTF-8 encoded text.
+--
+-- __NOTE__: The replacement character returned by 'OnDecodeError'
+-- MUST be within the BMP plane; surrogate code points will
+-- automatically be remapped to the replacement char @U+FFFD@
+-- (/since 0.11.3.0/), whereas code points beyond the BMP will throw an
+-- 'error' (/since 1.2.3.1/); For earlier versions of @text@ using
+-- those unsupported code points would result in undefined behavior.
 decodeUtf8With :: OnDecodeError -> ByteString -> Text
 decodeUtf8With onErr (PS fp off len) = runText $ \done -> do
   let go dest = withForeignPtr fp $ \ptr ->
@@ -152,16 +162,52 @@ decodeUtf8With onErr (PS fp off len) = runText $ \done -> do
                     x <- peek curPtr'
                     case onErr desc (Just x) of
                       Nothing -> loop $ curPtr' `plusPtr` 1
-                      Just c -> do
-                        destOff <- peek destOffPtr
-                        w <- unsafeSTToIO $
-                             unsafeWrite dest (fromIntegral destOff) (safe c)
-                        poke destOffPtr (destOff + fromIntegral w)
-                        loop $ curPtr' `plusPtr` 1
+                      Just c
+                        | c > '\xFFFF' -> throwUnsupportedReplChar
+                        | otherwise -> do
+                            destOff <- peek destOffPtr
+                            w <- unsafeSTToIO $
+                                 unsafeWrite dest (fromIntegral destOff)
+                                             (safe c)
+                            poke destOffPtr (destOff + fromIntegral w)
+                            loop $ curPtr' `plusPtr` 1
           loop (ptr `plusPtr` off)
   (unsafeIOToST . go) =<< A.new len
  where
   desc = "Data.Text.Internal.Encoding.decodeUtf8: Invalid UTF-8 stream"
+
+  throwUnsupportedReplChar = throwIO $
+    ErrorCall "decodeUtf8With: non-BMP replacement characters not supported"
+  -- TODO: The code currently assumes that the transcoded UTF-16
+  -- stream is at most twice as long (in bytes) as the input UTF-8
+  -- stream. To justify this assumption one has to assume that the
+  -- error handler replacement character also satisfies this
+  -- invariant, by emitting at most one UTF16 code unit.
+  --
+  -- One easy way to support the full range of code-points for
+  -- replacement characters in the error handler is to simply change
+  -- the (over-)allocation to `A.new (2*len)` and then shrink back the
+  -- `ByteArray#` to the real size (recent GHCs have a cheap
+  -- `ByteArray#` resize-primop for that which allow the GC to reclaim
+  -- the overallocation). However, this would require 4 times as much
+  -- (temporary) storage as the original UTF-8 required.
+  --
+  -- Another strategy would be to optimistically assume that
+  -- replacement characters are within the BMP, and if the case of a
+  -- non-BMP replacement occurs reallocate the target buffer (or throw
+  -- an exception, and fallback to a pessimistic codepath, like e.g.
+  -- `decodeUtf8With onErr bs = F.unstream (E.streamUtf8 onErr bs)`)
+  --
+  -- Alternatively, `OnDecodeError` could become a datastructure which
+  -- statically encodes the replacement-character range,
+  -- e.g. something isomorphic to
+  --
+  --   Either (... -> Maybe Word16) (... -> Maybe Char)
+  --
+  -- And allow to statically switch between the BMP/non-BMP
+  -- replacement-character codepaths. There's multiple ways to address
+  -- this with different tradeoffs; but ideally we should optimise for
+  -- the optimistic/error-free case.
 {- INLINE[0] decodeUtf8With #-}
 
 -- $stream
@@ -218,6 +264,8 @@ decodeUtf8With onErr (PS fp off len) = runText $ \done -> do
 -- or continuation where it is encountered.
 
 -- | A stream oriented decoding result.
+--
+-- @since 1.0.0.0
 data Decoding = Some Text ByteString (ByteString -> Decoding)
 
 instance Show Decoding where
@@ -237,11 +285,15 @@ newtype DecoderState = DecoderState Word32 deriving (Eq, Show, Num, Storable)
 -- thrown (either by this function or a continuation) that cannot be
 -- caught in pure code.  For more control over the handling of invalid
 -- data, use 'streamDecodeUtf8With'.
+--
+-- @since 1.0.0.0
 streamDecodeUtf8 :: ByteString -> Decoding
 streamDecodeUtf8 = streamDecodeUtf8With strictDecode
 
 -- | Decode, in a stream oriented way, a 'ByteString' containing UTF-8
 -- encoded text.
+--
+-- @since 1.0.0.0
 streamDecodeUtf8With :: OnDecodeError -> ByteString -> Decoding
 streamDecodeUtf8With onErr = decodeChunk B.empty 0 0
  where
@@ -317,6 +369,8 @@ decodeUtf8' = unsafeDupablePerformIO . try . evaluate . decodeUtf8With strictDec
 {-# INLINE decodeUtf8' #-}
 
 -- | Encode text to a ByteString 'B.Builder' using UTF-8 encoding.
+--
+-- @since 1.1.0.0
 encodeUtf8Builder :: Text -> B.Builder
 encodeUtf8Builder = encodeUtf8BuilderEscaped (BP.liftFixedToBounded BP.word8)
 
@@ -325,6 +379,8 @@ encodeUtf8Builder = encodeUtf8BuilderEscaped (BP.liftFixedToBounded BP.word8)
 --
 -- Use this function is to implement efficient encoders for text-based formats
 -- like JSON or HTML.
+--
+-- @since 1.1.0.0
 {-# INLINE encodeUtf8BuilderEscaped #-}
 -- TODO: Extend documentation with references to source code in @blaze-html@
 -- or @aeson@ that uses this function.
@@ -392,7 +448,7 @@ encodeUtf8 :: Text -> ByteString
 encodeUtf8 (Text arr off len)
   | len == 0  = B.empty
   | otherwise = unsafeDupablePerformIO $ do
-  fp <- mallocByteString (len*4)
+  fp <- mallocByteString (len*3) -- see https://github.com/haskell/text/issues/194 for why len*3 is enough
   withForeignPtr fp $ \ptr ->
     with ptr $ \destPtr -> do
       c_encode_utf8 destPtr (A.aBA arr) (fromIntegral off) (fromIntegral len)

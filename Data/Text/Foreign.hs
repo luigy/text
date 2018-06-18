@@ -5,7 +5,6 @@
 --
 -- License     : BSD-style
 -- Maintainer  : bos@serpentine.com
--- Stability   : experimental
 -- Portability : GHC
 --
 -- Support for using 'Text' data with native code via the Haskell
@@ -108,7 +107,7 @@ takeWord16 (I16 n) t@(Text arr off len)
     | n >= len || m >= len = t
     | otherwise            = Text arr off m
   where
-    m | w < 0xDB00 || w > 0xD8FF = n
+    m | w < 0xD800 || w > 0xDBFF = n
       | otherwise                = n+1
     w = A.unsafeIndex arr (off+n-1)
 
@@ -157,6 +156,8 @@ asForeignPtr t@(Text _arr _off len) = do
 -- | /O(n)/ Decode a C string with explicit length, which is assumed
 -- to have been encoded as UTF-8. If decoding fails, a
 -- 'UnicodeException' is thrown.
+--
+-- @since 1.0.0.0
 peekCStringLen :: CStringLen -> IO Text
 peekCStringLen cs = do
   bs <- unsafePackCStringLen cs
@@ -169,5 +170,7 @@ peekCStringLen cs = do
 -- The temporary storage is freed when the subcomputation terminates
 -- (either normally or via an exception), so the pointer to the
 -- temporary storage must /not/ be used after this function returns.
+--
+-- @since 1.0.0.0
 withCStringLen :: Text -> (CStringLen -> IO a) -> IO a
 withCStringLen t act = unsafeUseAsCStringLen (encodeUtf8 t) act

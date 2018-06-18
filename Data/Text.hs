@@ -15,7 +15,6 @@
 --
 -- License     : BSD-style
 -- Maintainer  : bos@serpentine.com
--- Stability   : experimental
 -- Portability : GHC
 --
 -- A time and space-efficient implementation of Unicode text.
@@ -32,8 +31,9 @@
 --
 -- To use an extended and very rich family of functions for working
 -- with Unicode text (including normalization, regular expressions,
--- non-standard encodings, text breaking, and locales), see
--- <http://hackage.haskell.org/package/text-icu the text-icu package >.
+-- non-standard encodings, text breaking, and locales), see the
+-- <http://hackage.haskell.org/package/text-icu text-icu package >.
+--
 
 module Data.Text
     (
@@ -42,6 +42,9 @@ module Data.Text
 
     -- * Acceptable data
     -- $replacement
+
+    -- * Definition of character
+    -- $character_definition
 
     -- * Fusion
     -- $fusion
@@ -60,6 +63,7 @@ module Data.Text
     , snoc
     , append
     , uncons
+    , unsnoc
     , head
     , last
     , tail
@@ -298,6 +302,17 @@ unpackCString# addr# = Text $ SJS.unstream (SJS.streamCString# addr#)
       = singleton a #-}
 
 ---------------------------------------------------------------------
+-- $character_definition
+--
+-- This package uses the term /character/ to denote Unicode /code points/.
+--
+-- Note that this is not the same thing as a grapheme (e.g. a
+-- composition of code points that form one visual symbol). For
+-- instance, consider the grapheme \"&#x00e4;\". This symbol has two
+-- Unicode representations: a single code-point representation
+-- @U+00E4@ (the @LATIN SMALL LETTER A WITH DIAERESIS@ code point),
+-- and a two code point representation @U+0061@ (the \"@A@\" code
+-- point) and @U+0308@ (the @COMBINING DIAERESIS@ code point).
 
 -- $strict
 --
@@ -392,9 +407,13 @@ instance Read Text where
     readsPrec p str = [(pack x,y) | (x,y) <- readsPrec p str]
 
 #if MIN_VERSION_base(4,9,0)
--- Semigroup orphan instances for older GHCs are provided by
--- 'semigroups` package
-
+-- | Non-orphan 'Semigroup' instance only defined for
+-- @base-4.9.0.0@ and later; orphan instances for older GHCs are
+-- provided by
+-- the [semigroups](http://hackage.haskell.org/package/semigroups)
+-- package
+--
+-- @since 1.2.2.0
 instance Semigroup Text where
     (<>) = append
 #endif
@@ -412,6 +431,7 @@ instance IsString Text where
     fromString = pack
 
 #if __GLASGOW_HASKELL__ >= 708
+-- | @since 1.2.0.0
 instance Exts.IsList Text where
     type Item Text = Char
     fromList       = pack
@@ -422,6 +442,7 @@ instance Exts.IsList Text where
 instance NFData Text where rnf !_ = ()
 #endif
 
+-- | @since 1.2.1.0
 instance Binary Text where
     put t = put (encodeUtf8 t)
     get   = do
@@ -455,6 +476,8 @@ instance Data Text where
 
 #if MIN_VERSION_base(4,7,0)
 -- | Only defined for @base-4.7.0.0@ and later
+--
+-- @since 1.2.2.0
 instance PrintfArg Text where
   formatArg t = formatString $ unpack t
 #endif
@@ -612,6 +635,19 @@ init = coerce JSS.init
     unstream (S.init (stream t)) = init t
  #-}
 
+-- | /O(1)/ Returns all but the last character and the last character of a
+-- 'Text', or 'Nothing' if empty.
+--
+-- @since 1.2.3.0
+unsnoc :: Text -> Maybe (Text, Char)
+unsnoc (Text arr off len)
+    | len <= 0                 = Nothing
+    | n < 0xDC00 || n > 0xDFFF = Just (text arr off (len-1), unsafeChr n)
+    | otherwise                = Just (text arr off (len-2), U16.chr2 n0 n)
+    where n  = A.unsafeIndex arr (off+len-1)
+          n0 = A.unsafeIndex arr (off+len-2)
+{-# INLINE [1] unsnoc #-}
+
 -- | /O(1)/ Tests whether a 'Text' is empty or not.  Subject to
 -- fusion.
 null :: Text -> Bool
@@ -693,8 +729,15 @@ compareLength t n = S.compareLengthI (stream t) n
 -- -----------------------------------------------------------------------------
 -- * Transformations
 -- | /O(n)/ 'map' @f@ @t@ is the 'Text' obtained by applying @f@ to
--- each element of @t@.  Subject to fusion.  Performs replacement on
--- invalid scalar values.
+-- each element of @t@.
+--
+-- Example:
+--
+-- >>> let message = pack "I am not angry. Not at all."
+-- >>> T.map (\c -> if c == '.' then '!' else c) message
+-- "I am not angry! Not at all!"
+--
+-- Subject to fusion.  Performs replacement on invalid scalar values.
 map :: (Char -> Char) -> Text -> Text
 map = coerce JSS.map
 -- map f t = unstream (S.map (safe . f) (stream t))
@@ -703,20 +746,38 @@ map = coerce JSS.map
 -- | /O(n)/ The 'intercalate' function takes a 'Text' and a list of
 -- 'Text's and concatenates the list after interspersing the first
 -- argument between each element of the list.
+--
+-- Example:
+--
+-- >>> T.intercalate "NI!" ["We", "seek", "the", "Holy", "Grail"]
+-- "WeNI!seekNI!theNI!HolyNI!Grail"
 intercalate :: Text -> [Text] -> Text
 intercalate = coerce JSS.intercalate
 -- intercalate t = concat . (F.intersperse t)
 {-# INLINE intercalate #-}
 
 -- | /O(n)/ The 'intersperse' function takes a character and places it
--- between the characters of a 'Text'.  Subject to fusion.  Performs
--- replacement on invalid scalar values.
+-- between the characters of a 'Text'.
+--
+-- Example:
+--
+-- >>> T.intersperse '.' "SHIELD"
+-- "S.H.I.E.L.D"
+--
+-- Subject to fusion.  Performs replacement on invalid scalar values.
 intersperse     :: Char -> Text -> Text
 intersperse = coerce JSS.intersperse
 -- intersperse c t = unstream (S.intersperse (safe c) (stream t))
 {-# INLINE intersperse #-}
 
--- | /O(n)/ Reverse the characters of a string. Subject to fusion.
+-- | /O(n)/ Reverse the characters of a string.
+--
+-- Example:
+--
+-- >>> T.reverse "desrever"
+-- "reversed"
+--
+-- Subject to fusion.
 reverse :: Text -> Text
 reverse = coerce JSS.reverse
 -- reverse t = S.reverse (stream t)
@@ -736,12 +797,14 @@ reverse = coerce JSS.reverse
 -- @needle@ occurs in @replacement@, that occurrence will /not/ itself
 -- be replaced recursively:
 --
--- > replace "oo" "foo" "oo" == "foo"
+-- >>> replace "oo" "foo" "oo"
+-- "foo"
 --
 -- In cases where several instances of @needle@ overlap, only the
 -- first one will be replaced:
 --
--- > replace "ofo" "bar" "ofofo" == "barfo"
+-- >>> replace "ofo" "bar" "ofofo"
+-- "barfo"
 --
 -- In (unlikely) bad cases, this function's time complexity degrades
 -- towards /O(n*m)/.
@@ -859,6 +922,8 @@ toUpper = coerce JSS.toUpper
 -- guides disagree on whether the book name \"The Hill of the Red
 -- Fox\" is correctly title cased&#x2014;but this function will
 -- capitalize /every/ word.
+--
+-- @since 1.0.0.0
 toTitle :: Text -> Text
 toTitle = coerce JSS.toTitle
 -- toTitle t = unstream (S.toTitle (stream t))
@@ -870,8 +935,11 @@ toTitle = coerce JSS.toTitle
 --
 -- Examples:
 --
--- > justifyLeft 7 'x' "foo"    == "fooxxxx"
--- > justifyLeft 3 'x' "foobar" == "foobar"
+-- >>> justifyLeft 7 'x' "foo"
+-- "fooxxxx"
+--
+-- >>> justifyLeft 3 'x' "foobar"
+-- "foobar"
 justifyLeft :: Int -> Char -> Text -> Text
 justifyLeft = coerce JSS.justifyLeft
 -- justifyLeft k c t
@@ -893,8 +961,11 @@ justifyLeft = coerce JSS.justifyLeft
 --
 -- Examples:
 --
--- > justifyRight 7 'x' "bar"    == "xxxxbar"
--- > justifyRight 3 'x' "foobar" == "foobar"
+-- >>> justifyRight 7 'x' "bar"
+-- "xxxxbar"
+--
+-- >>> justifyRight 3 'x' "foobar"
+-- "foobar"
 justifyRight :: Int -> Char -> Text -> Text
 justifyRight = coerce JSS.justifyRight
 -- justifyRight k c t
@@ -909,7 +980,8 @@ justifyRight = coerce JSS.justifyRight
 --
 -- Examples:
 --
--- > center 8 'x' "HS" = "xxxHSxxx"
+-- >>> center 8 'x' "HS"
+-- "xxxHSxxx"
 center :: Int -> Char -> Text -> Text
 center = coerce JSS.center
 -- center k c t
@@ -925,6 +997,14 @@ center = coerce JSS.center
 -- of its 'Text' argument.  Note that this function uses 'pack',
 -- 'unpack', and the list version of transpose, and is thus not very
 -- efficient.
+--
+-- Examples:
+--
+-- >>> transpose ["green","orange"]
+-- ["go","rr","ea","en","ng","e"]
+--
+-- >>> transpose ["blue","red"]
+-- ["br","le","ud","e"]
 transpose :: [Text] -> [Text]
 transpose = coerce JSS.transpose
 -- transpose ts = P.map pack (L.transpose (P.map unpack ts))
@@ -1207,7 +1287,10 @@ take = coerce JSS.take
 --
 -- Examples:
 --
--- > takeEnd 3 "foobar" == "bar"
+-- >>> takeEnd 3 "foobar"
+-- "bar"
+--
+-- @since 1.1.1.0
 takeEnd :: Int -> Text -> Text
 takeEnd = coerce JSS.takeEnd
 -- takeEnd n t@(Text arr off len)
@@ -1248,7 +1331,10 @@ drop = coerce JSS.drop
 --
 -- Examples:
 --
--- > dropEnd 3 "foobar" == "foo"
+-- >>> dropEnd 3 "foobar"
+-- "foo"
+--
+-- @since 1.1.1.0
 dropEnd :: Int -> Text -> Text
 dropEnd = coerce JSS.dropEnd
 -- dropEnd n t@(Text arr off len)
@@ -1280,7 +1366,10 @@ takeWhile = coerce JSS.takeWhile
 -- satisfy @p@.  Subject to fusion.
 -- Examples:
 --
--- > takeWhileEnd (=='o') "foo" == "oo"
+-- >>> takeWhileEnd (=='o') "foo"
+-- "oo"
+--
+-- @since 1.2.2.0
 takeWhileEnd :: (Char -> Bool) -> Text -> Text
 #ifndef __GHCJS__
 takeWhileEnd p t@(Text arr off len) = loop (len-1) len
@@ -1329,7 +1418,8 @@ dropWhile = coerce JSS.dropWhile
 --
 -- Examples:
 --
--- > dropWhileEnd (=='.') "foo..." == "foo"
+-- >>> dropWhileEnd (=='.') "foo..."
+-- "foo"
 dropWhileEnd :: (Char -> Bool) -> Text -> Text
 dropWhileEnd = coerce JSS.dropWhileEnd
 -- dropWhileEnd p t@(Text arr off len) = loop (len-1) len
@@ -1454,9 +1544,14 @@ tails = coerce JSS.tails
 --
 -- Examples:
 --
--- > splitOn "\r\n" "a\r\nb\r\nd\r\ne" == ["a","b","d","e"]
--- > splitOn "aaa"  "aaaXaaaXaaaXaaa"  == ["","X","X","X",""]
--- > splitOn "x"    "x"                == ["",""]
+-- >>> splitOn "\r\n" "a\r\nb\r\nd\r\ne"
+-- ["a","b","d","e"]
+--
+-- >>> splitOn "aaa"  "aaaXaaaXaaaXaaa"
+-- ["","X","X","X",""]
+--
+-- >>> splitOn "x"    "x"
+-- ["",""]
 --
 -- and
 --
@@ -1493,8 +1588,11 @@ splitOn = coerce JSS.splitOn
 -- resulting components do not contain the separators.  Two adjacent
 -- separators result in an empty component in the output.  eg.
 --
--- > split (=='a') "aabbaca" == ["","","bb","c",""]
--- > split (=='a') ""        == [""]
+-- >>> split (=='a') "aabbaca"
+-- ["","","bb","c",""]
+--
+-- >>> split (=='a') ""
+-- [""]
 split :: (Char -> Bool) -> Text -> [Text]
 split = coerce JSS.split
 -- split _ t@(Text _off _arr 0) = [t]
@@ -1508,8 +1606,11 @@ split = coerce JSS.split
 -- element may be shorter than the other chunks, depending on the
 -- length of the input. Examples:
 --
--- > chunksOf 3 "foobarbaz"   == ["foo","bar","baz"]
--- > chunksOf 4 "haskell.org" == ["hask","ell.","org"]
+-- >>> chunksOf 3 "foobarbaz"
+-- ["foo","bar","baz"]
+--
+-- >>> chunksOf 4 "haskell.org"
+-- ["hask","ell.","org"]
 chunksOf :: Int -> Text -> [Text]
 chunksOf = coerce JSS.chunksOf
 -- chunksOf k = go
@@ -1558,8 +1659,11 @@ filter = coerce JSS.filter
 --
 -- Examples:
 --
--- > breakOn "::" "a::b::c" ==> ("a", "::b::c")
--- > breakOn "/" "foobar"   ==> ("foobar", "")
+-- >>> breakOn "::" "a::b::c"
+-- ("a","::b::c")
+--
+-- >>> breakOn "/" "foobar"
+-- ("foobar","")
 --
 -- Laws:
 --
@@ -1588,7 +1692,8 @@ breakOn = coerce JSS.breakOn
 -- up to and including the last match of @needle@.  The second is the
 -- remainder of @haystack@, following the match.
 --
--- > breakOnEnd "::" "a::b::c" ==> ("a::b::", "c")
+-- >>> breakOnEnd "::" "a::b::c"
+-- ("a::b::","c")
 breakOnEnd :: Text -> Text -> (Text, Text)
 breakOnEnd = coerce JSS.breakOnEnd
 -- breakOnEnd pat src = (reverse b, reverse a)
@@ -1604,10 +1709,11 @@ breakOnEnd = coerce JSS.breakOnEnd
 --
 -- Examples:
 --
--- > breakOnAll "::" ""
--- > ==> []
--- > breakOnAll "/" "a/b/c/"
--- > ==> [("a", "/b/c/"), ("a/b", "/c/"), ("a/b/c", "/")]
+-- >>> breakOnAll "::" ""
+-- []
+--
+-- >>> breakOnAll "/" "a/b/c/"
+-- [("a","/b/c/"),("a/b","/c/"),("a/b/c","/")]
 --
 -- In (unlikely) bad cases, this function's time complexity degrades
 -- towards /O(n*m)/.
@@ -1821,9 +1927,14 @@ isInfixOf = coerce JSS.isInfixOf
 --
 -- Examples:
 --
--- > stripPrefix "foo" "foobar" == Just "bar"
--- > stripPrefix ""    "baz"    == Just "baz"
--- > stripPrefix "foo" "quux"   == Nothing
+-- >>> stripPrefix "foo" "foobar"
+-- Just "bar"
+--
+-- >>> stripPrefix ""    "baz"
+-- Just "baz"
+--
+-- >>> stripPrefix "foo" "quux"
+-- Nothing
 --
 -- This is particularly useful with the @ViewPatterns@ extension to
 -- GHC, as follows:
@@ -1849,9 +1960,14 @@ stripPrefix = coerce JSS.stripPrefix
 --
 -- Examples:
 --
--- > commonPrefixes "foobar" "fooquux" == Just ("foo","bar","quux")
--- > commonPrefixes "veeble" "fetzer"  == Nothing
--- > commonPrefixes "" "baz"           == Nothing
+-- >>> commonPrefixes "foobar" "fooquux"
+-- Just ("foo","bar","quux")
+--
+-- >>> commonPrefixes "veeble" "fetzer"
+-- Nothing
+--
+-- >>> commonPrefixes "" "baz"
+-- Nothing
 commonPrefixes :: Text -> Text -> Maybe (Text,Text,Text)
 commonPrefixes = coerce JSS.commonPrefixes
 -- commonPrefixes t0@(Text arr0 off0 len0) t1@(Text arr1 off1 len1) = go 0 0
@@ -1869,9 +1985,14 @@ commonPrefixes = coerce JSS.commonPrefixes
 --
 -- Examples:
 --
--- > stripSuffix "bar" "foobar" == Just "foo"
--- > stripSuffix ""    "baz"    == Just "baz"
--- > stripSuffix "foo" "quux"   == Nothing
+-- >>> stripSuffix "bar" "foobar"
+-- Just "foo"
+--
+-- >>> stripSuffix ""    "baz"
+-- Just "baz"
+--
+-- >>> stripSuffix "foo" "quux"
+-- Nothing
 --
 -- This is particularly useful with the @ViewPatterns@ extension to
 -- GHC, as follows:
@@ -1923,3 +2044,11 @@ foreign import javascript unsafe
   "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString
 foreign import javascript unsafe
   "$2.substr($1)" js_substr1 :: Int -> JSString -> JSString
+
+-------------------------------------------------
+-- NOTE: the named chunk below used by doctest;
+--       verify the doctests via `doctest -fobject-code Data/Text.hs`
+
+-- $setup
+-- >>> :set -XOverloadedStrings
+-- >>> import qualified Data.Text as T

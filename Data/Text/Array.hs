@@ -7,7 +7,6 @@
 --
 -- License     : BSD-style
 -- Maintainer  : bos@serpentine.com
--- Stability   : experimental
 -- Portability : portable
 --
 -- Packed, unboxed, heap-resident arrays.  Suitable for performance
@@ -80,6 +79,8 @@ import GHC.Word (Word16(..))
 import Prelude hiding (length, read)
 
 -- | Immutable array type.
+--
+-- The 'Array' constructor is exposed since @text-1.1.1.3@
 data Array = Array {
       aBA :: ByteArray#
 #if defined(ASSERTS)
@@ -88,6 +89,8 @@ data Array = Array {
     }
 
 -- | Mutable array type, for use in the ST monad.
+--
+-- The 'MArray' constructor is exposed since @text-1.1.1.3@
 data MArray s = MArray {
       maBA :: MutableByteArray# s
 #if defined(ASSERTS)

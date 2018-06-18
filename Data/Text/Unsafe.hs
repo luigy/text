@@ -7,7 +7,6 @@
 -- Copyright   : (c) 2009, 2010, 2011 Bryan O'Sullivan
 -- License     : BSD-style
 -- Maintainer  : bos@serpentine.com
--- Stability   : experimental
 -- Portability : portable
 --
 -- A module containing unsafe 'Text' operations, for very very careful
@@ -150,6 +149,8 @@ reverseIter (Text txt) i
 -- | /O(1)/ Iterate one step backwards through a UTF-16 array,
 -- returning the delta to add (i.e. a negative number) to give the
 -- next offset to iterate at.
+--
+-- @since 1.1.1.0
 reverseIter_ :: Text -> Int -> Int
 #ifndef __GHCJS__
 reverseIter_ (Text arr off _len) i

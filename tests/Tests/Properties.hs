@@ -9,9 +9,9 @@ module Tests.Properties
     ) where
 
 import Control.Applicative ((<$>), (<*>))
-import Control.Arrow ((***), second)
+import Control.Arrow ((***), first, second)
 import Data.Bits ((.&.))
-import Data.Char (chr, isDigit, isHexDigit, isLower, isSpace, isUpper, ord)
+import Data.Char (chr, isDigit, isHexDigit, isLower, isSpace, isLetter, isUpper, ord)
 import Data.Int (Int8, Int16, Int32, Int64)
 import Data.Monoid (Monoid(..))
 import Data.String (IsString(fromString))
@@ -23,6 +23,7 @@ import Data.Text.Internal.Search (indices)
 import Data.Text.Lazy.Read as TL
 import Data.Text.Read as T
 import Data.Word (Word, Word8, Word16, Word32, Word64)
+import Data.Maybe (mapMaybe)
 import Numeric (showEFloat, showFFloat, showGFloat, showHex)
 import Prelude hiding (replicate)
 import Test.Framework (Test, testGroup)
@@ -30,6 +31,7 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck hiding ((.&.))
 import Test.QuickCheck.Monadic
 import Test.QuickCheck.Property (Property(..))
+import Test.QuickCheck.Unicode (char)
 import Tests.QuickCheckUtils
 import Tests.Utils
 import Text.Show.Functions ()
@@ -37,6 +39,7 @@ import qualified Control.Exception as Exception
 import qualified Data.Bits as Bits (shiftL, shiftR)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Char as C
 import qualified Data.List as L
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as E
@@ -60,10 +63,10 @@ t_pack_unpack       = (T.unpack . T.pack) `eq` id
 tl_pack_unpack      = (TL.unpack . TL.pack) `eq` id
 t_stream_unstream   = (S.unstream . S.stream) `eq` id
 tl_stream_unstream  = (SL.unstream . SL.stream) `eq` id
-t_reverse_stream t  = (S.reverse . S.reverseStream) t == t
-t_singleton c       = [c] == (T.unpack . T.singleton) c
-tl_singleton c      = [c] == (TL.unpack . TL.singleton) c
-tl_unstreamChunks x = f 11 x == f 1000 x
+t_reverse_stream t  = (S.reverse . S.reverseStream) t === t
+t_singleton c       = [c] === (T.unpack . T.singleton) c
+tl_singleton c      = [c] === (TL.unpack . TL.singleton) c
+tl_unstreamChunks x = f 11 x === f 1000 x
     where f n = SL.unstreamChunks n . S.streamList
 tl_chunk_unchunk    = (TL.fromChunks . TL.toChunks) `eq` id
 tl_from_to_strict   = (TL.fromStrict . TL.toStrict) `eq` id
@@ -74,13 +77,13 @@ encodeL1 = B.pack . map (fromIntegral . fromEnum) . T.unpack
 encodeLazyL1 :: TL.Text -> BL.ByteString
 encodeLazyL1 = BL.fromChunks . map encodeL1 . TL.toChunks
 
-t_ascii t    = E.decodeASCII (E.encodeUtf8 a) == a
+t_ascii t    = E.decodeASCII (E.encodeUtf8 a) === a
     where a  = T.map (\c -> chr (ord c `mod` 128)) t
-tl_ascii t   = EL.decodeASCII (EL.encodeUtf8 a) == a
+tl_ascii t   = EL.decodeASCII (EL.encodeUtf8 a) === a
     where a  = TL.map (\c -> chr (ord c `mod` 128)) t
-t_latin1 t   = E.decodeLatin1 (encodeL1 a) == a
+t_latin1 t   = E.decodeLatin1 (encodeL1 a) === a
     where a  = T.map (\c -> chr (ord c `mod` 256)) t
-tl_latin1 t  = EL.decodeLatin1 (encodeLazyL1 a) == a
+tl_latin1 t  = EL.decodeLatin1 (encodeLazyL1 a) === a
     where a  = TL.map (\c -> chr (ord c `mod` 256)) t
 t_utf8       = forAll genUnicode $ (E.decodeUtf8 . E.encodeUtf8) `eq` id
 t_utf8'      = forAll genUnicode $ (E.decodeUtf8' . E.encodeUtf8) `eq` (id . Right)
@@ -111,7 +114,7 @@ t_utf8_undecoded = forAll genUnicode $ \t ->
   let b = E.encodeUtf8 t
       ls = concatMap (leftover . E.encodeUtf8 . T.singleton) . T.unpack $ t
       leftover = (++ [B.empty]) . init . tail . B.inits
-  in (map snd . feedChunksOf 1 E.streamDecodeUtf8) b == ls
+  in (map snd . feedChunksOf 1 E.streamDecodeUtf8) b === ls
 
 data Badness = Solo | Leading | Trailing
              deriving (Eq, Show)
@@ -177,6 +180,33 @@ genInvalidUTF8 = B.pack <$> oneof [
       k <- choose (0,n)
       vectorOf k gen
 
+-- See http://unicode.org/faq/utf_bom.html#gen8
+-- A sequence such as <110xxxxx2 0xxxxxxx2> is illegal ...
+-- When faced with this illegal byte sequence ... a UTF-8 conformant process
+-- must treat the first byte 110xxxxx2 as an illegal termination error
+-- (e.g. filter it out or replace by 0xFFFD) ...
+-- ... and continue processing at the second byte 0xxxxxxx2
+t_decode_with_error2 =
+  E.decodeUtf8With (\_ _ -> Just 'x') (B.pack [0xC2, 97]) === "xa"
+t_decode_with_error3 =
+  E.decodeUtf8With (\_ _ -> Just 'x') (B.pack [0xE0, 97, 97]) === "xaa"
+t_decode_with_error4 =
+  E.decodeUtf8With (\_ _ -> Just 'x') (B.pack [0xF0, 97, 97, 97]) === "xaaa"
+
+t_decode_with_error2' =
+  case E.streamDecodeUtf8With (\_ _ -> Just 'x') (B.pack [0xC2, 97]) of
+    E.Some x _ _ -> x === "xa"
+t_decode_with_error3' =
+  case E.streamDecodeUtf8With (\_ _ -> Just 'x') (B.pack [0xC2, 97, 97]) of
+    E.Some x _ _ -> x === "xaa"
+t_decode_with_error4' =
+  case E.streamDecodeUtf8With (\_ _ -> Just 'x') (B.pack [0xC2, 97, 97, 97]) of
+    E.Some x _ _ -> x === "xaaa"
+
+t_infix_concat bs1 text bs2 rep =
+  text `T.isInfixOf`
+    E.decodeUtf8With (\_ _ -> rep) (B.concat [bs1, E.encodeUtf8 text, bs2])
+
 s_Eq s            = (s==)    `eq` ((S.streamList s==) . S.streamList)
     where _types = s :: String
 sf_Eq p s =
@@ -201,8 +231,8 @@ t_mconcat         = unsquare $
                     mconcat `eq` (unpackS . mconcat . L.map T.pack)
 tl_mconcat        = unsquare $
                     mconcat `eq` (unpackS . mconcat . L.map TL.pack)
-t_mempty          = mempty == (unpackS (mempty :: T.Text))
-tl_mempty         = mempty == (unpackS (mempty :: TL.Text))
+t_mempty          = mempty === (unpackS (mempty :: T.Text))
+tl_mempty         = mempty === (unpackS (mempty :: TL.Text))
 t_IsString        = fromString  `eqP` (T.unpack . fromString)
 tl_IsString       = fromString  `eqP` (TL.unpack . fromString)
 
@@ -229,6 +259,13 @@ sf_uncons p       = (uncons . L.filter p) `eqP`
                     (fmap (second unpackS) . S.uncons . S.filter p)
 t_uncons          = uncons   `eqP` (fmap (second unpackS) . T.uncons)
 tl_uncons         = uncons   `eqP` (fmap (second unpackS) . TL.uncons)
+
+unsnoc xs@(_:_) = Just (init xs, last xs)
+unsnoc []       = Nothing
+
+t_unsnoc          = unsnoc   `eqP` (fmap (first unpackS) . T.unsnoc)
+tl_unsnoc         = unsnoc   `eqP` (fmap (first unpackS) . TL.unsnoc)
+
 s_head            = head   `eqP` S.head
 sf_head p         = (head . L.filter p) `eqP` (S.head . S.filter p)
 t_head            = head   `eqP` T.head
@@ -326,6 +363,19 @@ t_toUpper_upper t = p (T.toUpper t) >= p t
     where p = T.length . T.filter isUpper
 tl_toUpper_upper t = p (TL.toUpper t) >= p t
     where p = TL.length . TL.filter isUpper
+t_toTitle_title t = all (<= 1) (caps w)
+    where caps = fmap (T.length . T.filter isUpper) . T.words . T.toTitle
+          -- TIL: there exist uppercase-only letters
+          w = T.filter (\c -> if C.isUpper c then C.toLower c /= c else True) t
+t_toTitle_1stNotLower = and . notLow . T.toTitle . T.filter stable
+    where notLow = mapMaybe (fmap (not . isLower) . (T.find isLetter)) . T.words
+          -- Surprise! The Spanish/Portuguese ordinal indicators changed
+          -- from category Ll (letter, lowercase) to Lo (letter, other)
+          -- in Unicode 7.0
+          -- Oh, and there exist lowercase-only letters (see previous test)
+          stable c = if isLower c
+                     then C.toUpper c /= c
+                     else c /= '\170' && c /= '\186'
 
 justifyLeft k c xs  = xs ++ L.replicate (k - length xs) c
 justifyRight m n xs = L.replicate (m - length xs) n ++ xs
@@ -514,12 +564,20 @@ s_takeWhile p     = L.takeWhile p `eqP` (unpackS . S.takeWhile p)
 s_takeWhile_s p   = L.takeWhile p `eqP` (unpackS . S.unstream . S.takeWhile p)
 sf_takeWhile q p  = (L.takeWhile p . L.filter q) `eqP`
                     (unpackS . S.takeWhile p . S.filter q)
+noMatch = do
+  c <- char
+  d <- suchThat char (/= c)
+  return (c,d)
 t_takeWhile p     = L.takeWhile p `eqP` (unpackS . T.takeWhile p)
 tl_takeWhile p    = L.takeWhile p `eqP` (unpackS . TL.takeWhile p)
 t_takeWhileEnd p  = (L.reverse . L.takeWhile p . L.reverse) `eqP`
                     (unpackS . T.takeWhileEnd p)
+t_takeWhileEnd_null t = forAll noMatch $ \(c,d) -> T.null $
+                    T.takeWhileEnd (==d) (T.snoc t c)
 tl_takeWhileEnd p = (L.reverse . L.takeWhile p . L.reverse) `eqP`
                     (unpackS . TL.takeWhileEnd p)
+tl_takeWhileEnd_null t = forAll noMatch $ \(c,d) -> TL.null $
+                    TL.takeWhileEnd (==d) (TL.snoc t c)
 s_dropWhile p     = L.dropWhile p `eqP` (unpackS . S.dropWhile p)
 s_dropWhile_s p   = L.dropWhile p `eqP` (unpackS . S.unstream . S.dropWhile p)
 sf_dropWhile q p  = (L.dropWhile p . L.filter q) `eqP`
@@ -720,7 +778,7 @@ tl_indices (NotEmpty s) = lazyIndices s `eq` S.indices s
           conc = T.concat . TL.toChunks
 t_indices_occurs = unsquare $ \(NotEmpty t) ts ->
     let s = T.intercalate t ts
-    in Slow.indices t s == indices t s
+    in Slow.indices t s === indices t s
 
 -- Bit shifts.
 shiftL w = forAll (choose (0,width-1)) $ \k -> Bits.shiftL w k == U.shiftL w k
@@ -812,18 +870,18 @@ tb_formatRealFloat_double (a::Double) = tb_formatRealFloat a
 -- Reading.
 
 t_decimal (n::Int) s =
-    T.signed T.decimal (T.pack (show n) `T.append` t) == Right (n,t)
+    T.signed T.decimal (T.pack (show n) `T.append` t) === Right (n,t)
     where t = T.dropWhile isDigit s
 tl_decimal (n::Int) s =
-    TL.signed TL.decimal (TL.pack (show n) `TL.append` t) == Right (n,t)
+    TL.signed TL.decimal (TL.pack (show n) `TL.append` t) === Right (n,t)
     where t = TL.dropWhile isDigit s
 t_hexadecimal m s ox =
-    T.hexadecimal (T.concat [p, T.pack (showHex n ""), t]) == Right (n,t)
+    T.hexadecimal (T.concat [p, T.pack (showHex n ""), t]) === Right (n,t)
     where t = T.dropWhile isHexDigit s
           p = if ox then "0x" else ""
           n = getPositive m :: Int
 tl_hexadecimal m s ox =
-    TL.hexadecimal (TL.concat [p, TL.pack (showHex n ""), t]) == Right (n,t)
+    TL.hexadecimal (TL.concat [p, TL.pack (showHex n ""), t]) === Right (n,t)
     where t = TL.dropWhile isHexDigit s
           p = if ox then "0x" else ""
           n = getPositive m :: Int
@@ -867,11 +925,11 @@ tl_write_read_line e m b t = write_read head TL.filter TL.hPutStrLn
 
 t_dropWord16 m t = dropWord16 m t `T.isSuffixOf` t
 t_takeWord16 m t = takeWord16 m t `T.isPrefixOf` t
-t_take_drop_16 m t = T.append (takeWord16 n t) (dropWord16 n t) == t
+t_take_drop_16 m t = T.append (takeWord16 n t) (dropWord16 n t) === t
   where n = small m
 t_use_from t = monadicIO $ assert . (==t) =<< run (useAsPtr t fromPtr)
 
-t_copy t = T.copy t == t
+t_copy t = T.copy t === t
 
 -- Regression tests.
 s_filter_eq s = S.filter p t == S.streamList (filter p s)
@@ -924,6 +982,15 @@ tests =
       testGroup "errors" [
         testProperty "t_utf8_err" t_utf8_err,
         testProperty "t_utf8_err'" t_utf8_err'
+      ],
+      testGroup "error recovery" [
+        testProperty "t_decode_with_error2" t_decode_with_error2,
+        testProperty "t_decode_with_error3" t_decode_with_error3,
+        testProperty "t_decode_with_error4" t_decode_with_error4,
+        testProperty "t_decode_with_error2'" t_decode_with_error2',
+        testProperty "t_decode_with_error3'" t_decode_with_error3',
+        testProperty "t_decode_with_error4'" t_decode_with_error4',
+        testProperty "t_infix_concat" t_infix_concat
       ]
     ],
 
@@ -967,6 +1034,8 @@ tests =
       testProperty "sf_uncons" sf_uncons,
       testProperty "t_uncons" t_uncons,
       testProperty "tl_uncons" tl_uncons,
+      testProperty "t_unsnoc" t_unsnoc,
+      testProperty "tl_unsnoc" tl_unsnoc,
       testProperty "s_head" s_head,
       testProperty "sf_head" sf_head,
       testProperty "t_head" t_head,
@@ -1030,7 +1099,9 @@ tests =
         testProperty "tl_toLower_lower" tl_toLower_lower,
         testProperty "t_toUpper_length" t_toUpper_length,
         testProperty "t_toUpper_upper" t_toUpper_upper,
-        testProperty "tl_toUpper_upper" tl_toUpper_upper
+        testProperty "tl_toUpper_upper" tl_toUpper_upper,
+        testProperty "t_toTitle_title" t_toTitle_title,
+        testProperty "t_toTitle_1stNotLower" t_toTitle_1stNotLower
       ],
 
       testGroup "justification" [
@@ -1147,7 +1218,9 @@ tests =
         testProperty "t_takeWhile" t_takeWhile,
         testProperty "tl_takeWhile" tl_takeWhile,
         testProperty "t_takeWhileEnd" t_takeWhileEnd,
+        testProperty "t_takeWhileEnd_null" t_takeWhileEnd_null,
         testProperty "tl_takeWhileEnd" tl_takeWhileEnd,
+        testProperty "tl_takeWhileEnd_null" tl_takeWhileEnd_null,
         testProperty "sf_dropWhile" sf_dropWhile,
         testProperty "s_dropWhile" s_dropWhile,
         testProperty "s_dropWhile_s" s_dropWhile_s,
