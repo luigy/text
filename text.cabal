@@ -97,13 +97,13 @@ library
     Data.Text.Array
     Data.Text.Encoding
     Data.Text.Encoding.Error
-    Data.Text.Foreign
+    -- Data.Text.Foreign
     Data.Text.IO
     Data.Text.Internal
     Data.Text.Internal.Builder
-    Data.Text.Internal.Builder.Functions
-    Data.Text.Internal.Builder.Int.Digits
-    Data.Text.Internal.Builder.RealFloat.Functions
+    -- Data.Text.Internal.Builder.Functions
+    -- Data.Text.Internal.Builder.Int.Digits
+    -- Data.Text.Internal.Builder.RealFloat.Functions
     Data.Text.Internal.Encoding.Fusion
     Data.Text.Internal.Encoding.Fusion.Common
     Data.Text.Internal.Encoding.Utf16
@@ -115,14 +115,14 @@ library
     Data.Text.Internal.Fusion.Common
     Data.Text.Internal.Fusion.Size
     Data.Text.Internal.Fusion.Types
-    Data.Text.Internal.IO
+    -- Data.Text.Internal.IO
     Data.Text.Internal.Lazy
-    Data.Text.Internal.Lazy.Encoding.Fusion
+    -- Data.Text.Internal.Lazy.Encoding.Fusion
     Data.Text.Internal.Lazy.Fusion
     Data.Text.Internal.Lazy.Search
     Data.Text.Internal.Private
     Data.Text.Internal.Read
-    Data.Text.Internal.Search
+    -- Data.Text.Internal.Search
     Data.Text.Internal.Unsafe
     Data.Text.Internal.Unsafe.Char
     Data.Text.Internal.Unsafe.Shift
@@ -133,18 +133,23 @@ library
     Data.Text.Lazy.Encoding
     Data.Text.Lazy.IO
     Data.Text.Lazy.Internal
-    Data.Text.Lazy.Read
+    -- Data.Text.Lazy.Read
     Data.Text.Read
     Data.Text.Unsafe
+    --  moved from ghcjs-base
+    -- reflex-dom depends in it
+    Data.JSString.Text
 
-  other-modules:
-    Data.Text.Show
+  -- other-modules:
+  --   Data.Text.Show
 
   build-depends:
     array      >= 0.3,
     base       >= 4.2 && < 5,
     binary,
     deepseq    >= 1.1.0.0,
+    ghcjs-base,
+    ghcjs-prim,
     ghc-prim   >= 0.2
 
   if flag(bytestring-builder)

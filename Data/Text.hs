@@ -639,12 +639,13 @@ init = coerce JSS.init
 --
 -- @since 1.2.3.0
 unsnoc :: Text -> Maybe (Text, Char)
-unsnoc (Text arr off len)
-    | len <= 0                 = Nothing
-    | n < 0xDC00 || n > 0xDFFF = Just (text arr off (len-1), unsafeChr n)
-    | otherwise                = Just (text arr off (len-2), U16.chr2 n0 n)
-    where n  = A.unsafeIndex arr (off+len-1)
-          n0 = A.unsafeIndex arr (off+len-2)
+unsnoc = coerce JSS.unsnoc
+-- unsnoc (Text arr off len)
+--     | len <= 0                 = Nothing
+--     | n < 0xDC00 || n > 0xDFFF = Just (text arr off (len-1), unsafeChr n)
+--     | otherwise                = Just (text arr off (len-2), U16.chr2 n0 n)
+--     where n  = A.unsafeIndex arr (off+len-1)
+--           n0 = A.unsafeIndex arr (off+len-2)
 {-# INLINE [1] unsnoc #-}
 
 -- | /O(1)/ Tests whether a 'Text' is empty or not.  Subject to
