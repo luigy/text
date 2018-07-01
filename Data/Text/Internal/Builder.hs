@@ -367,5 +367,5 @@ foreign import javascript unsafe
   js_fromString :: JSString -> (# ByteArray#, Int# #)
 
 foreign import javascript unsafe
-  "h$textToString"
+  "h$textToString($1,$2,$3)"
   js_toString :: ByteArray# -> Int# -> Int# -> JSString

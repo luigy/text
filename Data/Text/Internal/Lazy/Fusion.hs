@@ -176,7 +176,7 @@ countChar = S.countCharI
 
 #ifdef __GHCJS__
 foreign import javascript unsafe
-  "h$textToString"
+  "h$textToString($1,$2,$3)"
   js_toString :: ByteArray# -> Int# -> Int# -> JSString
 #endif
 
