@@ -260,7 +260,7 @@ import Data.Coerce
 import GHC.Base (build)
 import qualified GHC.CString                          as GHC
 import GHC.Exts (Addr#, ByteArray#)
-import GHCJS.Prim (JSVal (..), unpackJSString#)
+import GHCJS.Prim (unsafeUnpackJSString#)
 
 unpack :: Text -> String
 unpack = coerce JSS.unpack
@@ -277,7 +277,9 @@ singleton = coerce JSS.singleton
     unstream (S.singleton (safe a)) = singleton a
  #-}
 
-{-# RULES "inlineJSString" forall s. pack (GHC.Base.build (GHC.unpackFoldrCString# s)) = Text (JSString (unsafeDupablePerformIO (unpackJSString# s))) #-}
+{-# RULES "inlineJSString" forall s.
+  pack (GHC.Base.build (GHC.unpackFoldrCString# s)) =
+    Text (JSString (unsafeUnpackJSString# s)) #-}
 
 -- | /O(n)/ Convert a literal string into a JSString.  Subject to fusion.
 unpackCString# :: Addr# -> Text
@@ -299,6 +301,12 @@ unpackCString# addr# = Text $ SJS.unstream (SJS.streamCString# addr#)
 {-# RULES "TEXT singleton literal" [1] forall a.
     unstream (S.map safe (S.streamList [a]))
       = singleton a #-}
+
+#if MIN_VERSION_ghcjs_prim(0,1,1)
+{-# RULES "TEXT literal prim" [0] forall a.
+    unpackCString# a = Text (JSString (unsafeUnpackJSString# a))
+  #-}
+#endif
 
 ---------------------------------------------------------------------
 -- $character_definition
