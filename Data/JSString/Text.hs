@@ -60,5 +60,5 @@ lazyTextFromJSVal = TL.fromStrict . textFromJSVal
 -- ----------------------------------------------------------------------------
 
 foreign import javascript unsafe
-  "h$lazyTextToString"
+  "h$lazyTextToString($1)"
   js_lazyTextToString :: Any -> JSString

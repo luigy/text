@@ -2041,7 +2041,7 @@ copy = P.id -- TODO
 --       marr <- A.new len
 
 foreign import javascript unsafe
-  "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString
+  "h$jsstringReplicateChar($1,$2)" js_replicateChar :: Int -> Char -> JSString
 foreign import javascript unsafe
   "$2.substr($1)" js_substr1 :: Int -> JSString -> JSString
 

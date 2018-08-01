@@ -201,10 +201,10 @@ foreign import javascript unsafe
   "$2.charCodeAt($1)" js_charCodeAt :: Int -> JSString -> Int#
 
 foreign import javascript unsafe
-  "h$jsstringTake" js_take :: Int -> JSString -> JSString
+  "h$jsstringTake($1,$2)" js_take :: Int -> JSString -> JSString
 
 foreign import javascript unsafe
-  "h$jsstringDrop" js_drop :: Int -> JSString -> JSString
+  "h$jsstringDrop($1,$2)" js_drop :: Int -> JSString -> JSString
 
 foreign import javascript unsafe
   "$1.length" js_length :: JSString -> Int
