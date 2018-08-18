@@ -183,7 +183,7 @@ takeWord16 :: Int -> Text -> Text
 #ifndef __GHCJS__
 takeWord16 k (Text arr off _len) = Text arr off k
 #else
-takeWord16 k (Text txt) = Text $ js_take k txt
+takeWord16 (I# k) (Text txt) = Text $ js_substr 0# k txt
 #endif
 {-# INLINE takeWord16 #-}
 
@@ -192,7 +192,7 @@ dropWord16 :: Int -> Text -> Text
 #ifndef __GHCJS__
 dropWord16 k (Text arr off len) = Text arr (off+k) (len-k)
 #else
-dropWord16 k (Text txt) = Text $ js_drop k txt
+dropWord16 (I# k) (Text txt) = Text $ js_substr1 k txt
 #endif
 {-# INLINE dropWord16 #-}
 
@@ -201,11 +201,12 @@ foreign import javascript unsafe
   "$2.charCodeAt($1)" js_charCodeAt :: Int -> JSString -> Int#
 
 foreign import javascript unsafe
-  "h$jsstringTake" js_take :: Int -> JSString -> JSString
-
-foreign import javascript unsafe
-  "h$jsstringDrop" js_drop :: Int -> JSString -> JSString
-
-foreign import javascript unsafe
   "$1.length" js_length :: JSString -> Int
+
+foreign import javascript unsafe
+  "$3.substr($1,$2)" js_substr :: Int# -> Int# -> JSString -> JSString
+
+foreign import javascript unsafe
+  "$2.substr($1)" js_substr1 :: Int# -> JSString -> JSString
+
 #endif

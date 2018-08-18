@@ -63,16 +63,20 @@ stream text = Stream next (text :*: 0) unknownSize
         | i >= len  = next (ts :*: 0)
         | otherwise = Yield c (txt :*: i+d)
         where Iter c d = iter t i
+{-# INLINE [0] stream #-}
 #else
 stream text = Stream next (text :*: 0) -- unknownSize
   where
     next (Empty :*: _) = Done
     next (txt@(Chunk t@(I.Text jst) ts) :*: i)
-        | i >= JSS.length jst = next (ts :*: 0)
+        | i >= I# (js_length jst) = next (ts :*: 0)
         | otherwise = Yield c (txt :*: i+d)
         where Iter c d = iter t i
-#endif
 {-# INLINE [0] stream #-}
+
+foreign import javascript unsafe
+  "$1.length" js_length :: JSString -> Int#
+#endif
 
 -- TODO
 -- | /O(n)/ Convert a 'Stream Char' into a 'Text', using the given

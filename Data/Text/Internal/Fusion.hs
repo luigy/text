@@ -84,7 +84,7 @@ unstream = coerce JSS.unstream
 {-# RULES "STREAM stream/unstream fusion" forall s. stream (unstream s) = s #-}
 
 length :: Stream Char -> Int
-length = JSS.length
+length = S.lengthI
 {-# INLINE [0] length #-}
 
 reverse :: Stream Char -> Text

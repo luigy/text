@@ -8,6 +8,8 @@
 #endif
 #ifdef __GHCJS__
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnliftedFFITypes #-}
 #endif
 -- |
 -- Module      : Data.Text.Lazy
@@ -248,6 +250,8 @@ import Text.Printf (PrintfArg, formatArg, formatString)
 #endif
 #ifdef __GHCJS__
 import Data.JSString (JSString)
+import GHC.Base (Int(..))
+import GHC.Exts (Int#)
 #endif
 
 -- $fusion
@@ -353,8 +357,8 @@ compareText (Chunk a0 as) (Chunk b0 bs) = outer a0 b0
       | otherwise = go (i+di) (j+dj)
       where T.Iter a di = T.iter ta i
             T.Iter b dj = T.iter tb j
-            lenA = T.length ta
-            lenB = T.length tb
+            lenA = I# (js_length jsa)
+            lenB = I# (js_length jsb)
 #endif
 
 instance Show Text where
@@ -1181,7 +1185,7 @@ dropWords i t0
             | n < len'  = chunk (T.Text $ js_substr1 n' jst) ts
             | otherwise = drop' (n - len') ts
             where len'  = fromIntegral len
-                  len   = T.length t
+                  len   = I# (js_length jst)
                   n'    = fromIntegral n
 #endif
 
@@ -1321,7 +1325,7 @@ splitAtWord x (Chunk c@(T.Text jst) cs)
     | otherwise = chunk (T.Text (js_substr 0 (y-1) jst)) empty :*:
                   chunk (T.Text (js_substr1 y jst)) cs
     where y = fromIntegral x
-          len = T.length c
+          len = I# (js_length jst)
 #endif
 
 -- | /O(n+m)/ Find the first instance of @needle@ (which must be
@@ -1505,7 +1509,7 @@ splitOn pat src
 #ifndef __GHCJS__
     l = foldlChunks (\a (T.Text _ _ b) -> a + fromIntegral b) 0 pat
 #else
-    l = foldlChunks (\a t -> a + fromIntegral (T.length t)) 0 pat
+    l = foldlChunks (\a (T.Text t) -> a + fromIntegral (I# (js_length t))) 0 pat
 #endif
 {-# INLINE [1] splitOn #-}
 
@@ -1774,4 +1778,5 @@ impossibleError fun = P.error ("Data.Text.Lazy." ++ fun ++ ": impossible case")
 #ifdef __GHCJS__
 foreign import javascript unsafe "$2.substr($1)" js_substr1 :: Exts.Int -> JSString -> JSString
 foreign import javascript unsafe "$3.substr($1,$2)" js_substr :: Exts.Int -> Exts.Int -> JSString -> JSString
+foreign import javascript unsafe "$1.length" js_length :: JSString -> Int#
 #endif
