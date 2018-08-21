@@ -60,8 +60,13 @@ foreign import javascript unsafe
 text :: A.Array -> Int -> Int -> Text
 -- text arr off len | len == 0  = empty
 --                  | otherwise = text_ arr off len
+#if defined(ASSERTS)
+text (A.Array ba _) (I# off#) (I# len#) | isTrue# (len# ==# 0#) = empty
+                                      | otherwise = Text $ js_textToString ba off# len#
+#else
 text (A.Array ba) (I# off#) (I# len#) | isTrue# (len# ==# 0#) = empty
                                       | otherwise = Text $ js_textToString ba off# len#
+#endif
 
 -- | Checked multiplication.  Calls 'error' if the result would
 -- overflow.

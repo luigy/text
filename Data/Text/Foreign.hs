@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns, CPP, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE JavaScriptFFI, ForeignFunctionInterface, UnliftedFFITypes, MagicHash #-}
 -- |
 -- Module      : Data.Text.Foreign
 -- Copyright   : (c) 2009, 2010 Bryan O'Sullivan
@@ -50,6 +51,13 @@ import Foreign.Marshal.Alloc (allocaBytes)
 import Foreign.Ptr (Ptr, castPtr, plusPtr)
 import Foreign.Storable (peek, poke)
 import qualified Data.Text.Array as A
+#ifdef __GHCJS__
+import Data.JSString (JSString)
+import GHC.Exts (ByteArray#, Int#)
+import GHC.Prim (int2Word#)
+import GHC.Int (Int(..))
+import GHC.Word (Word16(..))
+#endif
 
 -- $interop
 --
@@ -74,11 +82,15 @@ fromPtr :: Ptr Word16           -- ^ source array
         -> I16                  -- ^ length of source array (in 'Word16' units)
         -> IO Text
 fromPtr _   (I16 0)   = return empty
-fromPtr ptr (I16 len) =
+fromPtr ptr (I16 (len@(I# len#))) =
 #if defined(ASSERTS)
     assert (len > 0) $
 #endif
+#if defined(__GHCJS__)
+    return $! Text (js_toString (A.aBA arr) 0# len#)
+#else
     return $! Text arr 0 len
+#endif
   where
     arr = A.run (A.new len >>= copy)
     copy marr = loop ptr 0
@@ -102,14 +114,30 @@ fromPtr ptr (I16 len) =
 -- end of the prefix will be advanced by one additional 'Word16' unit
 -- to maintain its validity.
 takeWord16 :: I16 -> Text -> Text
+#ifdef __GHCJS__
+takeWord16 (I16 n@(I# n#)) t@(Text jss)
+    | n <= 0               = empty
+    | n >= len || m >= len = t
+    | otherwise            = Text (js_substr 0# n# jss)
+#else
 takeWord16 (I16 n) t@(Text arr off len)
     | n <= 0               = empty
     | n >= len || m >= len = t
     | otherwise            = Text arr off m
+#endif
   where
+#ifdef __GHCJS__
+    len = js_length jss
+    arr = js_length jss
+    m@(I# m#) | w < 0xD800 || w > 0xDBFF = n
+      | otherwise                = n+1
+    w = I# w#
+    w# = js_charCodeAt (n-1) jss
+#else
     m | w < 0xD800 || w > 0xDBFF = n
       | otherwise                = n+1
     w = A.unsafeIndex arr (off+n-1)
+#endif
 
 -- | /O(1)/ Return the suffix of the 'Text', with @n@ 'Word16' units
 -- dropped from its beginning.
@@ -118,18 +146,45 @@ takeWord16 (I16 n) t@(Text arr off len)
 -- beginning of the suffix will be advanced by one additional 'Word16'
 -- unit to maintain its validity.
 dropWord16 :: I16 -> Text -> Text
+#ifdef __GHCJS__
+dropWord16 (I16 n@(I# n#)) t@(Text jss)
+    | n <= 0               = t
+    | n >= len || m >= len = empty
+    | otherwise            = Text (js_substr1 n# jss)
+#else
 dropWord16 (I16 n) t@(Text arr off len)
     | n <= 0               = t
     | n >= len || m >= len = empty
     | otherwise            = Text arr (off+m) (len-m)
+#endif
   where
+#ifdef __GHCJS__
+    len = js_length jss
+    arr = js_length jss
+    m@(I# m#) | w < 0xD800 || w > 0xDBFF = n
+      | otherwise                = n+1
+    w = I# w#
+    w# = js_charCodeAt (n-1) jss
+#else
     m | w < 0xD800 || w > 0xDBFF = n
       | otherwise                = n+1
     w = A.unsafeIndex arr (off+n-1)
+#endif
 
 -- | /O(n)/ Copy a 'Text' to an array.  The array is assumed to be big
 -- enough to hold the contents of the entire 'Text'.
 unsafeCopyToPtr :: Text -> Ptr Word16 -> IO ()
+#ifdef __GHCJS__
+unsafeCopyToPtr (Text jst) ptr = loop ptr off
+  where
+    end = off + len
+    loop !p !i | i == end  = return ()
+               | otherwise = do
+      poke p (W16# (int2Word# (js_charCodeAt i jst)))
+      loop (p `plusPtr` 2) (i + 1)
+    off = 0
+    len = js_length jst
+#else
 unsafeCopyToPtr (Text arr off len) ptr = loop ptr off
   where
     end = off + len
@@ -137,21 +192,38 @@ unsafeCopyToPtr (Text arr off len) ptr = loop ptr off
                | otherwise = do
       poke p (A.unsafeIndex arr i)
       loop (p `plusPtr` 2) (i + 1)
+#endif
 
 -- | /O(n)/ Perform an action on a temporary, mutable copy of a
 -- 'Text'.  The copy is freed as soon as the action returns.
 useAsPtr :: Text -> (Ptr Word16 -> I16 -> IO a) -> IO a
+#ifdef __GHCJS__
+useAsPtr t@(Text jst) action =
+    allocaBytes (len * 2) $ \buf -> do
+      unsafeCopyToPtr t buf
+      action (castPtr buf) (fromIntegral len)
+  where len = js_length jst
+#else
 useAsPtr t@(Text _arr _off len) action =
     allocaBytes (len * 2) $ \buf -> do
       unsafeCopyToPtr t buf
       action (castPtr buf) (fromIntegral len)
+#endif
 
 -- | /O(n)/ Make a mutable copy of a 'Text'.
 asForeignPtr :: Text -> IO (ForeignPtr Word16, I16)
+#ifdef __GHCJS__
+asForeignPtr t@(Text jst) = do
+  fp <- mallocForeignPtrArray len
+  withForeignPtr fp $ unsafeCopyToPtr t
+  return (fp, I16 len)
+  where len = js_length jst
+#else
 asForeignPtr t@(Text _arr _off len) = do
   fp <- mallocForeignPtrArray len
   withForeignPtr fp $ unsafeCopyToPtr t
   return (fp, I16 len)
+#endif
 
 -- | /O(n)/ Decode a C string with explicit length, which is assumed
 -- to have been encoded as UTF-8. If decoding fails, a
@@ -174,3 +246,17 @@ peekCStringLen cs = do
 -- @since 1.0.0.0
 withCStringLen :: Text -> (CStringLen -> IO a) -> IO a
 withCStringLen t act = unsafeUseAsCStringLen (encodeUtf8 t) act
+
+#ifdef __GHCJS__
+foreign import javascript unsafe
+  "h$textToString($1,$2,$3)"
+  js_toString :: ByteArray# -> Int# -> Int# -> JSString
+foreign import javascript unsafe
+  "$3.substr($1,$2)" js_substr :: Int# -> Int# -> JSString -> JSString
+foreign import javascript unsafe
+  "$2.substr($1)" js_substr1 :: Int# -> JSString -> JSString
+foreign import javascript unsafe
+  "$1.length" js_length :: JSString -> Int
+foreign import javascript unsafe
+  "$2.charCodeAt($1)" js_charCodeAt :: Int -> JSString -> Int#
+#endif
