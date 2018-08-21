@@ -31,6 +31,7 @@ module Data.Text.Internal.Search
       indices
     ) where
 
+import Data.Coerce
 import qualified Data.Text.Array as A
 import Data.Word (Word64)
 import Data.Text.Internal (Text(..))

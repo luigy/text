@@ -250,13 +250,15 @@ test-suite tests
 
   build-depends:
     HUnit >= 1.2,
-    QuickCheck >= 2.7 && < 2.10,
+    QuickCheck >= 2.7 && < 2.12,
     array,
     base,
     binary,
     deepseq,
     directory,
     ghc-prim,
+    ghcjs-prim,
+    ghcjs-base,
     quickcheck-unicode >= 1.0.1.0,
     random,
     test-framework >= 0.4,

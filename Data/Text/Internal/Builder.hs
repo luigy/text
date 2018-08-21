@@ -174,7 +174,11 @@ fromText t@(Text t')
     | otherwise      = flush `append` mapBuilder (t :)
   where
     (# ba, len #) = js_fromString t'
+#if defined(ASSERTS)
+    (arr, off, l) = (A.Array ba (I# len), 0, I# len)
+#else
     (arr, off, l) = (A.Array ba, 0, I# len)
+#endif
 -- fromText t@(Text arr off l)
 --     | S.null t       = empty
 --     | l <= copyLimit = writeN l $ \marr o -> A.copyI marr o arr off (l+o)

@@ -401,7 +401,13 @@ encodeUtf8BuilderEscaped be =
 #ifdef __GHCJS__
         off = 0
         (arr, len) = let (# ba, len' #) = js_fromString t
-                     in (A.Array ba, I# len')
+#if defined(ASSERTS)
+                     in ( A.Array ba (I# len')
+#else
+                     in ( A.Array ba
+#endif
+                        , I# len'
+                        )
 #endif
         iend = off + len
 

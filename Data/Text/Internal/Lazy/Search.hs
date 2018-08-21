@@ -94,7 +94,11 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
             let foff = 0
                 (farr, flen) =
                   let (# ba, len #) = fromString t
+#if defined(ASSERTS)
+                  in (A.Array ba (I# len), I# len)
+#else
                   in (A.Array ba, I# len)
+#endif
             in A.unsafeIndex farr (foff+flen-1)
     (mask :: Word64) :*: skip = buildTable n ns 0 0 0 (nlen-2)
     swizzle w = 1 `shiftL` (fromIntegral w .&. 0x3f)
@@ -104,7 +108,11 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
         xoff = 0
         (xarr, xlen) =
           let (# ba, len #) = fromString t
+#if defined(ASSERTS)
+          in (A.Array ba (I# len), I# len)
+#else
           in (A.Array ba, I# len)
+#endif
         go !(g::Int64) !i !msk !skp
             | i >= xlast = case xs of
                              Empty      -> (msk .|. swizzle z) :*: skp
@@ -148,7 +156,11 @@ index t xs !i
       off = 0
       (arr, len) =
         let (# ba, len' #) = fromString t
+#if defined(ASSERTS)
+        in (A.Array ba (I# len'), I# len')
+#else
         in (A.Array ba, I# len')
+#endif
 
 -- | A variant of 'indices' that scans linearly for a single 'Word16'.
 indicesOne :: Word16 -> Int64 -> T.Text -> Text -> [Int64]
@@ -160,7 +172,11 @@ indicesOne c = chunk
         ooff = 0
         (oarr, olen) =
           let (# ba, len #) = fromString t
+#if defined(ASSERTS)
+          in (A.Array ba (I# len), I# len)
+#else
           in (A.Array ba, I# len)
+#endif
         go h | h >= olen = case os of
                              Empty      -> []
                              Chunk y ys -> chunk (i+fromIntegral olen) y ys
