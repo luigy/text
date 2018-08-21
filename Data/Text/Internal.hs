@@ -52,7 +52,7 @@ foreign import javascript unsafe
   js_decodeBytes :: ByteArray# -> JSString
 
 foreign import javascript unsafe
-  "h$textToString($1_1,$2,$3)"
+  "h$textToString($1,$2,$3)"
   js_textToString :: ByteArray# -> Int# -> Int# -> JSString
 
 -- | Construct a 'Text' without invisibly pinning its byte array in
