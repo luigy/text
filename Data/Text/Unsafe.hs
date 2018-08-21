@@ -57,11 +57,7 @@ unsafeHead (Text arr off _len)
     where m = A.unsafeIndex arr off
           n = A.unsafeIndex arr (off+1)
 #else
-unsafeRawHead :: JSString -> Char
-unsafeRawHead x = C# (chr# (js_charCodeAt 0 x))
-{-# INLINE unsafeRawHead #-}
-
-unsafeHead = coerce unsafeRawHead
+unsafeHead = coerce JSS.rawHead
 #endif
 {-# INLINE unsafeHead #-}
 
