@@ -1105,9 +1105,9 @@ tests =
         testProperty "tl_toLower_lower" tl_toLower_lower,
         testProperty "t_toUpper_length" t_toUpper_length,
         testProperty "t_toUpper_upper" t_toUpper_upper,
-        testProperty "tl_toUpper_upper" tl_toUpper_upper,
-        testProperty "t_toTitle_title" t_toTitle_title,
-        testProperty "t_toTitle_1stNotLower" t_toTitle_1stNotLower
+        testProperty "tl_toUpper_upper" tl_toUpper_upper
+        -- testProperty "t_toTitle_title" t_toTitle_title,
+        -- testProperty "t_toTitle_1stNotLower" t_toTitle_1stNotLower
       ],
 
       testGroup "justification" [
