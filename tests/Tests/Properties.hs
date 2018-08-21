@@ -543,8 +543,8 @@ t_take n          = L.take n      `eqP` (unpackS . T.take n)
 t_takeEnd n       = (L.reverse . L.take n . L.reverse) `eqP`
                     (unpackS . T.takeEnd n)
 tl_take n         = L.take n      `eqP` (unpackS . TL.take (fromIntegral n))
-tl_takeEnd n      = (L.reverse . L.take (fromIntegral n) . L.reverse) `eqP`
-                    (unpackS . TL.takeEnd n)
+tl_takeEnd n      = (L.reverse . L.take n . L.reverse) `eqP`
+                    (unpackS . TL.takeEnd (fromIntegral n))
 s_drop n          = L.drop n      `eqP` (unpackS . S.drop n)
 s_drop_s m        = L.drop n      `eqP` (unpackS . S.unstream . S.drop n)
   where n = small m
@@ -1105,9 +1105,9 @@ tests =
         testProperty "tl_toLower_lower" tl_toLower_lower,
         testProperty "t_toUpper_length" t_toUpper_length,
         testProperty "t_toUpper_upper" t_toUpper_upper,
-        testProperty "tl_toUpper_upper" tl_toUpper_upper
-        -- testProperty "t_toTitle_title" t_toTitle_title,
-        -- testProperty "t_toTitle_1stNotLower" t_toTitle_1stNotLower
+        testProperty "tl_toUpper_upper" tl_toUpper_upper,
+        testProperty "t_toTitle_title" t_toTitle_title,
+        testProperty "t_toTitle_1stNotLower" t_toTitle_1stNotLower
       ],
 
       testGroup "justification" [

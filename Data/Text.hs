@@ -1391,7 +1391,7 @@ takeWhileEnd p t@(Text jst) = loop (len-1) len
                    | p c       = loop (i+d) (l+d)
                    | otherwise = Text $ js_substr1 l jst
             where (c,d)        = reverseIter t i
-        len = length t
+        len = js_length jst
 #endif
 {-# INLINE [1] takeWhileEnd #-}
 
@@ -2052,6 +2052,8 @@ foreign import javascript unsafe
   "h$jsstringReplicateChar" js_replicateChar :: Int -> Char -> JSString
 foreign import javascript unsafe
   "$2.substr($1)" js_substr1 :: Int -> JSString -> JSString
+foreign import javascript unsafe
+  "$1.length" js_length :: JSString -> Int
 
 -------------------------------------------------
 -- NOTE: the named chunk below used by doctest;

@@ -35,12 +35,13 @@ import Data.Bits ((.|.), (.&.))
 import Data.Text.Internal.Unsafe.Shift (shiftL)
 
 import Data.JSString (JSString)
-import qualified Data.Text as TT
 import GHC.Exts (Int(..), Int#, ByteArray#)
 
 foreign import javascript unsafe
   "h$textFromString"
   js_fromString :: JSString -> (# ByteArray#, Int# #)
+foreign import javascript unsafe
+  "$1.length" js_length :: JSString -> Int
 
 fromString :: T.Text -> (# ByteArray#, Int# #)
 fromString (T.Text txt) = js_fromString txt
@@ -62,9 +63,9 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
     | otherwise  = advance k ks 0 0
   where
     -- advance x@(T.Text _ _ l) xs = scan
-    advance x xs = scan
+    advance x@(T.Text jst) xs = scan
      where
-      l = TT.length x
+      l = js_length jst
       scan !g !i
          | i >= m = case xs of
                       Empty           -> []
@@ -128,11 +129,11 @@ indices needle@(Chunk n ns) _haystack@(Chunk k ks)
     lackingHay q = go 0
       where
         -- go p (T.Text _ _ l) ps = p' < q && case ps of
-        go p t ps = p' < q && case ps of
+        go p t@(T.Text jst) ps = p' < q && case ps of
                                 Empty      -> True
                                 Chunk r rs -> go p' r rs
             where
-              l = TT.length t
+              l = js_length jst
               p' = p + fromIntegral l
 
 indices _ _ = []
@@ -187,7 +188,7 @@ indicesOne c = chunk
 -- | The number of 'Word16' values in a 'Text'.
 wordLength :: Text -> Int64
 wordLength = foldlChunks sumLength 0
-    where sumLength i t = i + fromIntegral (TT.length t)
+    where sumLength i (T.Text t) = i + fromIntegral (js_length t)
     -- where sumLength i (T.Text _ _ l) = i + fromIntegral l
 
 emptyError :: String -> a

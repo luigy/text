@@ -1135,8 +1135,14 @@ drop i t0
         drop' _ Empty        = Empty
         drop' n (Chunk t ts)
             | n < len   = Chunk (T.drop (fromIntegral n) t) ts
+#ifdef __GHCJS__
+            | n - len > intMax = drop' (n - len - intMax) (drop' intMax ts)
+#endif
             | otherwise = drop' (n - len) ts
             where len   = fromIntegral (T.length t)
+#ifdef __GHCJS__
+                  intMax = fromIntegral (P.maxBound :: Int)
+#endif
 {-# INLINE [1] drop #-}
 
 {-# RULES
@@ -1164,6 +1170,7 @@ dropEnd n t0
           | otherwise = fromChunks . L.reverse $
                         T.dropEnd (fromIntegral m) t : ts
           where l = fromIntegral (T.length t)
+                maxInt = fromIntegral (P.maxBound :: Int)
 
 -- | /O(n)/ 'dropWords' @n@ returns the suffix with @n@ 'Word16'
 -- values dropped, or the empty 'Text' if @n@ is greater than the
@@ -1322,7 +1329,7 @@ splitAtWord x (Chunk c@(T.Text arr off len) cs)
 splitAtWord x (Chunk c@(T.Text jst) cs)
     | y >= len  = let h :*: t = splitAtWord (x-fromIntegral len) cs
                   in  Chunk c h :*: t
-    | otherwise = chunk (T.Text (js_substr 0 (y-1) jst)) empty :*:
+    | otherwise = chunk (T.Text (js_substr 0 y jst)) empty :*:
                   chunk (T.Text (js_substr1 y jst)) cs
     where y = fromIntegral x
           len = I# (js_length jst)
